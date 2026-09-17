@@ -3,6 +3,7 @@ import {
   db,
   type Budget,
   type Goal,
+  type GoalContribution,
   type MoneySource,
   type Task,
   type Transaction,
@@ -17,7 +18,7 @@ import {
 } from './auth'
 import './App.css'
 
-type Page = 'home' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources'
+type Page = 'home' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
 
 const navigation: { id: Page; label: string; icon: string; description: string }[] = [
   { id: 'budgets', label: 'Ngân sách', icon: '💰', description: 'Theo dõi hạn mức chi tiêu' },
@@ -25,11 +26,37 @@ const navigation: { id: Page; label: string; icon: string; description: string }
   { id: 'tasks', label: 'Nhiệm vụ', icon: '📝', description: 'Hoàn thành việc nhỏ mỗi ngày' },
   { id: 'transactions', label: 'Giao dịch', icon: '💳', description: 'Quản lý thu nhập và chi tiêu' },
   { id: 'sources', label: 'Nguồn tiền', icon: '👛', description: 'Theo dõi số dư từng nguồn tiền' },
+  { id: 'settings', label: 'Cài đặt', icon: '⚙️', description: 'Tài khoản và dữ liệu ứng dụng' },
 ]
 
 const today = () => new Date().toISOString().slice(0, 10)
 const currentMonth = () => new Date().toISOString().slice(0, 7)
 const formatMoney = (amount: number) => `${amount.toLocaleString('vi-VN')}đ`
+const BACKGROUND_COLOR_KEY = 'mochi-background-color'
+const pastelBackgrounds = [
+  { label: 'Hồng Mochi', value: '#fce7f3' },
+  { label: 'Xanh bạc hà', value: '#e8f5ed' },
+  { label: 'Tím lavender', value: '#f0ebf8' },
+  { label: 'Đào nhạt', value: '#fff0e6' },
+  { label: 'Xanh trời', value: '#e7f2fa' },
+]
+const getInitialBackgroundColor = () => {
+  try {
+    const savedColor = localStorage.getItem(BACKGROUND_COLOR_KEY)
+    return pastelBackgrounds.find((option) => option.value === savedColor)?.value ?? pastelBackgrounds[0].value
+  } catch {
+    return pastelBackgrounds[0].value
+  }
+}
+const defaultMoneySourceTypes = [
+  'Tiền mặt',
+  'Tài khoản ngân hàng',
+  'Thẻ',
+  'Thẻ tín dụng',
+  'Thẻ ghi nợ',
+  'Thẻ trả trước',
+  'Ví điện tử',
+]
 
 function App() {
   const [storedAuth] = useState<{
@@ -68,14 +95,17 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState(storedAuth.error)
   const [page, setPage] = useState<Page>('home')
+  const [backgroundColor, setBackgroundColor] = useState(getInitialBackgroundColor)
   const [menuOpen, setMenuOpen] = useState(false)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [moneySources, setMoneySources] = useState<MoneySource[]>([])
   const [mochiPoints, setMochiPoints] = useState(0)
   const [error, setError] = useState('')
+  const [isDataLoading, setIsDataLoading] = useState(storedAuth.username !== null)
 
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
@@ -102,7 +132,9 @@ function App() {
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null)
   const [savingGoalId, setSavingGoalId] = useState<number | null>(null)
   const [savingAmount, setSavingAmount] = useState('')
+  const [savingDate, setSavingDate] = useState(today())
   const [savingSourceId, setSavingSourceId] = useState('')
+  const [editingContributionId, setEditingContributionId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!username) return
@@ -110,11 +142,12 @@ function App() {
 
     const loadData = async () => {
       try {
-        const [allTransactions, allBudgets, allGoals, allTasks, allMoneySources, savedPoints] =
+        const [allTransactions, allBudgets, allGoals, allGoalContributions, allTasks, allMoneySources, savedPoints] =
           await Promise.all([
             db.transactions.toArray(),
             db.budgets.toArray(),
             db.goals.toArray(),
+            db.goalContributions.toArray(),
             db.tasks.toArray(),
             db.moneySources.toArray(),
             db.points.get(1),
@@ -124,6 +157,7 @@ function App() {
         setTransactions(allTransactions)
         setBudgets(allBudgets)
         setGoals(allGoals)
+        setGoalContributions(allGoalContributions)
         setTasks(allTasks)
         setMoneySources(allMoneySources)
         setMochiPoints(savedPoints?.total ?? 0)
@@ -131,6 +165,8 @@ function App() {
         if (active) {
           setError(loadError instanceof Error ? loadError.message : 'Không thể tải dữ liệu.')
         }
+      } finally {
+        if (active) setIsDataLoading(false)
       }
     }
 
@@ -154,12 +190,14 @@ function App() {
         }
         await createLocalAccount(normalizedName, authPassword)
         setHasLocalAccount(true)
+        setIsDataLoading(true)
         setUsername(normalizedName)
       } else {
         if (authPassword.length > 128) {
           throw new Error('Mật khẩu không được dài quá 128 ký tự.')
         }
         const signedInUsername = await signInLocalAccount(authPassword)
+        setIsDataLoading(true)
         setUsername(signedInUsername)
       }
       setAuthPassword('')
@@ -182,6 +220,7 @@ function App() {
   const refreshTransactions = async () => setTransactions(await db.transactions.toArray())
   const refreshBudgets = async () => setBudgets(await db.budgets.toArray())
   const refreshGoals = async () => setGoals(await db.goals.toArray())
+  const refreshGoalContributions = async () => setGoalContributions(await db.goalContributions.toArray())
   const refreshTasks = async () => setTasks(await db.tasks.toArray())
   const refreshMoneySources = async () => setMoneySources(await db.moneySources.toArray())
 
@@ -191,6 +230,16 @@ function App() {
       await action()
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Đã xảy ra lỗi. Vui lòng thử lại.')
+    }
+  }
+
+  const updateBackgroundColor = (color: string) => {
+    if (!pastelBackgrounds.some((option) => option.value === color)) return
+    setBackgroundColor(color)
+    try {
+      localStorage.setItem(BACKGROUND_COLOR_KEY, color)
+    } catch {
+      setError('Không thể lưu màu nền trên thiết bị này.')
     }
   }
 
@@ -250,15 +299,58 @@ function App() {
         type: sourceType.trim(),
         initialBalance: Number(sourceInitialBalance),
       }
+      let createdSourceId: number | undefined
 
-      if (editingSourceId === null) {
-        const id = await db.moneySources.add(source)
-        setTransactionSourceId(String(id))
-      } else {
-        await db.moneySources.update(editingSourceId, source)
-      }
+      await db.transaction('rw', db.moneySources, db.transactions, async () => {
+        if (editingSourceId === null) {
+          createdSourceId = await db.moneySources.add(source)
+          if (source.initialBalance > 0) {
+            const openingBalanceTransactionId = await db.transactions.add({
+              type: 'income',
+              amount: source.initialBalance,
+              category: 'Số dư ban đầu',
+              note: `Số dư ban đầu · ${source.name}`,
+              date: today(),
+              sourceId: createdSourceId,
+              isOpeningBalance: true,
+            })
+            await db.moneySources.update(createdSourceId, { openingBalanceTransactionId })
+          }
+        } else {
+          const existingSource = await db.moneySources.get(editingSourceId)
+          if (!existingSource) throw new Error('Không tìm thấy nguồn tiền.')
 
-      await refreshMoneySources()
+          let openingBalanceTransactionId = existingSource.openingBalanceTransactionId
+          if (source.initialBalance > 0) {
+            const openingBalance = {
+              type: 'income' as const,
+              amount: source.initialBalance,
+              category: 'Số dư ban đầu',
+              note: `Số dư ban đầu · ${source.name}`,
+              date: today(),
+              sourceId: editingSourceId,
+              isOpeningBalance: true,
+            }
+            if (openingBalanceTransactionId === undefined) {
+              openingBalanceTransactionId = await db.transactions.add(openingBalance)
+            } else {
+              await db.transactions.update(openingBalanceTransactionId, openingBalance)
+            }
+          } else if (openingBalanceTransactionId !== undefined) {
+            await db.transactions.delete(openingBalanceTransactionId)
+            openingBalanceTransactionId = undefined
+          }
+
+          await db.moneySources.put({
+            ...source,
+            id: editingSourceId,
+            ...(openingBalanceTransactionId === undefined ? {} : { openingBalanceTransactionId }),
+          })
+        }
+      })
+
+      if (createdSourceId !== undefined) setTransactionSourceId(String(createdSourceId))
+      await Promise.all([refreshMoneySources(), refreshTransactions()])
       setEditingSourceId(null)
       setSourceName('')
       setSourceType('')
@@ -275,13 +367,16 @@ function App() {
 
   const deleteMoneySource = (id: number) => {
     void runAction(async () => {
-      const linkedTransactions = await db.transactions.where('sourceId').equals(id).count()
-      if (linkedTransactions > 0) {
+      const linkedTransactions = await db.transactions.where('sourceId').equals(id).toArray()
+      if (linkedTransactions.some((transaction) => !transaction.isOpeningBalance)) {
         throw new Error('Không thể xóa nguồn tiền đã có giao dịch. Hãy giữ lại để bảo toàn lịch sử số dư.')
       }
 
-      await db.moneySources.delete(id)
-      await refreshMoneySources()
+      await db.transaction('rw', db.moneySources, db.transactions, async () => {
+        await db.transactions.bulkDelete(linkedTransactions.map((transaction) => transaction.id!))
+        await db.moneySources.delete(id)
+      })
+      await Promise.all([refreshMoneySources(), refreshTransactions()])
       if (transactionSourceId === String(id)) setTransactionSourceId('')
     })
   }
@@ -346,35 +441,102 @@ function App() {
 
   const deleteGoal = (id: number) => {
     void runAction(async () => {
-      await db.goals.delete(id)
-      await refreshGoals()
+      await db.transaction('rw', db.goals, db.goalContributions, async () => {
+        await db.goalContributions.where('goalId').equals(id).delete()
+        await db.goals.delete(id)
+      })
+      await Promise.all([refreshGoals(), refreshGoalContributions()])
     })
   }
 
-  const addSaving = (goalId: number, sourceId: number) => {
+  const saveGoalContribution = (event: FormEvent<HTMLFormElement>, goalId: number) => {
+    event.preventDefault()
     void runAction(async () => {
       const value = Number(savingAmount)
-      if (value <= 0) return
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error('Số tiền cần là số nguyên lớn hơn 0.')
+      }
+      if (!savingDate) throw new Error('Hãy chọn ngày thêm tiền.')
+      const sourceId = Number(savingSourceId)
       if (!moneySources.some((source) => source.id === sourceId)) {
         throw new Error('Hãy chọn một nguồn tiền hợp lệ cho khoản tiết kiệm.')
       }
-      const goal = await db.goals.get(goalId)
-      if (!goal) throw new Error('Không tìm thấy mục tiêu tiết kiệm.')
 
-      await db.transaction('rw', db.goals, db.transactions, async () => {
-        await db.goals.update(goalId, { savedAmount: goal.savedAmount + value })
-        await db.transactions.add({
+      await db.transaction('rw', db.goals, db.goalContributions, db.transactions, async () => {
+        const goal = await db.goals.get(goalId)
+        if (!goal) throw new Error('Không tìm thấy mục tiêu tiết kiệm.')
+
+        const transaction = {
           type: 'expense',
           amount: value,
           category: 'Tiết kiệm',
           note: `Tiết kiệm cho mục tiêu: ${goal.name}`,
-          date: today(),
+          date: savingDate,
           sourceId,
+        } as const
+
+        if (editingContributionId === null) {
+          const transactionId = await db.transactions.add(transaction)
+          await db.goalContributions.add({ goalId, amount: value, date: savingDate, sourceId, transactionId })
+          await db.goals.update(goalId, { savedAmount: goal.savedAmount + value })
+        } else {
+          const contribution = await db.goalContributions.get(editingContributionId)
+          if (!contribution || contribution.goalId !== goalId) {
+            throw new Error('Không tìm thấy lần thêm tiền cần chỉnh sửa.')
+          }
+
+          let transactionId = contribution.transactionId
+          if (await db.transactions.update(transactionId, transaction) === 0) {
+            transactionId = await db.transactions.add(transaction)
+          }
+          await db.goalContributions.update(editingContributionId, {
+            amount: value,
+            date: savingDate,
+            sourceId,
+            transactionId,
+          })
+          await db.goals.update(goalId, { savedAmount: goal.savedAmount - contribution.amount + value })
+        }
+      })
+      await Promise.all([refreshGoals(), refreshGoalContributions(), refreshTransactions()])
+      setSavingGoalId(null)
+      setEditingContributionId(null)
+      setSavingAmount('')
+      setSavingDate(today())
+      setSavingSourceId('')
+    })
+  }
+
+  const editGoalContribution = (contribution: GoalContribution) => {
+    setSavingGoalId(contribution.goalId)
+    setEditingContributionId(contribution.id ?? null)
+    setSavingAmount(String(contribution.amount))
+    setSavingDate(contribution.date)
+    setSavingSourceId(String(contribution.sourceId))
+  }
+
+  const deleteGoalContribution = (contribution: GoalContribution) => {
+    if (contribution.id === undefined) return
+    void runAction(async () => {
+      await db.transaction('rw', db.goals, db.goalContributions, db.transactions, async () => {
+        const goal = await db.goals.get(contribution.goalId)
+        const currentContribution = await db.goalContributions.get(contribution.id!)
+        if (!goal || !currentContribution) return
+
+        await db.transactions.delete(currentContribution.transactionId)
+        await db.goalContributions.delete(currentContribution.id!)
+        await db.goals.update(goal.id!, {
+          savedAmount: Math.max(0, goal.savedAmount - currentContribution.amount),
         })
       })
-      await Promise.all([refreshGoals(), refreshTransactions()])
-      setSavingGoalId(null)
-      setSavingAmount('')
+      await Promise.all([refreshGoals(), refreshGoalContributions(), refreshTransactions()])
+      if (editingContributionId === contribution.id) {
+        setEditingContributionId(null)
+        setSavingGoalId(null)
+        setSavingAmount('')
+        setSavingDate(today())
+        setSavingSourceId('')
+      }
     })
   }
 
@@ -412,11 +574,15 @@ function App() {
   const balance = totalIncome - totalExpense
   const sourceBalance = (source: MoneySource) =>
     source.initialBalance + transactions
-      .filter((transaction) => transaction.sourceId === source.id)
+      .filter((transaction) => transaction.sourceId === source.id && !transaction.isOpeningBalance)
       .reduce((sum, transaction) =>
         sum + (transaction.type === 'income' ? transaction.amount : -transaction.amount), 0)
   const sourceTransactionCount = (sourceId: number) =>
     transactions.filter((transaction) => transaction.sourceId === sourceId).length
+  const sourceActivityCount = (sourceId: number) =>
+    transactions.filter((transaction) => transaction.sourceId === sourceId && !transaction.isOpeningBalance).length
+  const isGoalContributionTransaction = (transactionId?: number) =>
+    goalContributions.some((contribution) => contribution.transactionId === transactionId)
 
   const spentForBudget = (budget: Budget) =>
     transactions
@@ -428,6 +594,10 @@ function App() {
       .reduce((sum, transaction) => sum + transaction.amount, 0)
 
   const pageDetails = navigation.find((item) => item.id === page)
+  const moneySourceTypes = [...new Set([
+    ...defaultMoneySourceTypes,
+    ...moneySources.map((source) => source.type.trim()).filter(Boolean),
+  ])]
 
   if (!username) {
     return (
@@ -507,8 +677,22 @@ function App() {
     )
   }
 
+  if (isDataLoading) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="auth-brand">
+            <span className="auth-mascot" aria-hidden="true">🍡</span>
+            <span>mochi</span>
+          </div>
+          <p className="auth-description">Đang tải lại dữ liệu của bạn...</p>
+        </section>
+      </main>
+    )
+  }
+
   return (
-    <div className="mochi-app">
+    <div className="mochi-app" style={{ backgroundColor }}>
       <div className="dashboard-menu">
         <button
           className={`dashboard-trigger${menuOpen ? ' is-open' : ''}`}
@@ -543,24 +727,28 @@ function App() {
                 <span className="dashboard-nav-arrow" aria-hidden="true">›</span>
               </button>
             ))}
-            <div className="dashboard-points">⭐ <span>{username}</span><strong>{mochiPoints} điểm</strong></div>
             <button className="dashboard-signout" type="button" onClick={signOut}>Đăng xuất</button>
           </nav>
         )}
       </div>
+      <div className="points-badge" aria-label={`${mochiPoints} điểm Mochi`}>
+        <span aria-hidden="true">⭐</span><strong>{mochiPoints}</strong>
+      </div>
 
-      {page !== 'home' && pageDetails && (
+      {(page === 'home' || pageDetails) && (
         <main className="page-shell">
-          <header className="page-heading">
-            <div>
-              <p className="page-eyebrow">MOCHI • DASHBOARD</p>
-              <h1><span aria-hidden="true">{pageDetails.icon}</span> {pageDetails.label}</h1>
-              <p className="page-description">{pageDetails.description}</p>
-            </div>
-            <button className="home-link" type="button" onClick={() => setPage('home')}>
-              <span aria-hidden="true">←</span> Trang chủ
-            </button>
-          </header>
+          <header className="home-brand"><h1>mochi</h1></header>
+          {pageDetails && (
+            <header className="page-heading">
+              <div>
+                <h1><span aria-hidden="true">{pageDetails.icon}</span> {pageDetails.label}</h1>
+                <p className="page-description">{pageDetails.description}</p>
+              </div>
+              <button className="home-link" type="button" onClick={() => setPage('home')}>
+                <span aria-hidden="true">←</span> Trang chủ
+              </button>
+            </header>
+          )}
 
           {error && <div className="app-error" role="alert">{error}</div>}
 
@@ -625,14 +813,41 @@ function App() {
                   <div className="card-list">
                     {goals.map((goal) => {
                       const percentage = goal.targetAmount > 0 ? Math.min((goal.savedAmount / goal.targetAmount) * 100, 100) : 0
+                      const contributions = goalContributions
+                        .filter((contribution) => contribution.goalId === goal.id)
+                        .sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0))
                       return (
                         <article className="content-card" key={goal.id}>
                           <div className="item-heading"><div><h3>{goal.name}</h3><p>Hạn: {goal.deadline}</p></div><span className="status-pill">{Math.round(percentage)}%</span></div>
                           <div className="budget-numbers"><span>Đã tiết kiệm <strong>{formatMoney(goal.savedAmount)}</strong></span><span>Mục tiêu <strong>{formatMoney(goal.targetAmount)}</strong></span></div>
                           <div className="progress-track"><div className="progress-fill" style={{ width: `${percentage}%` }} /></div>
+                          <details className="goal-contribution-history history-disclosure" open>
+                            <summary className="history-disclosure-summary">
+                              <span className="history-disclosure-copy">
+                                <strong>Lịch sử thêm tiền</strong>
+                                <small>{contributions.length} lần thêm tiền</small>
+                              </span>
+                              <span className="history-chevron" aria-hidden="true">⌄</span>
+                            </summary>
+                            <div className="history-disclosure-content">
+                              {contributions.length === 0 ? <p>Chưa có lần thêm tiền nào.</p> : contributions.map((contribution) => (
+                                <div className="goal-contribution-row" key={contribution.id}>
+                                  <div className="goal-contribution-details">
+                                    <strong>{formatMoney(contribution.amount)}</strong>
+                                    <span>{contribution.date} · {moneySources.find((source) => source.id === contribution.sourceId)?.name ?? 'Nguồn tiền không còn tồn tại'}</span>
+                                  </div>
+                                  <div className="item-actions">
+                                    <button type="button" className="text-button" onClick={() => editGoalContribution(contribution)}>Sửa</button>
+                                    <button type="button" className="text-button danger-text" onClick={() => deleteGoalContribution(contribution)}>Xóa</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
                           {savingGoalId === goal.id && (
-                            <form className="saving-form" onSubmit={(event) => { event.preventDefault(); if (goal.id !== undefined) addSaving(goal.id, Number(savingSourceId)) }}>
+                            <form className="saving-form" onSubmit={(event) => { if (goal.id !== undefined) saveGoalContribution(event, goal.id) }}>
                               <label className="saving-input-label">Số tiền muốn thêm<input required type="number" min="1" value={savingAmount} onChange={(event) => setSavingAmount(event.target.value)} placeholder="Nhập số tiền" /></label>
+                              <label className="saving-input-label">Ngày thêm tiền<input required type="date" value={savingDate} onChange={(event) => setSavingDate(event.target.value)} /></label>
                               <label className="saving-input-label">Trừ từ nguồn tiền
                                 <select required value={savingSourceId} onChange={(event) => setSavingSourceId(event.target.value)}>
                                   <option value="">Chọn nguồn tiền</option>
@@ -643,11 +858,12 @@ function App() {
                                   ))}
                                 </select>
                               </label>
-                              <button className="primary-button" type="submit">Lưu khoản tiết kiệm</button>
+                              <button className="primary-button" type="submit">{editingContributionId === null ? 'Lưu khoản tiết kiệm' : 'Lưu thay đổi'}</button>
+                              {editingContributionId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingContributionId(null); setSavingAmount(''); setSavingDate(today()); setSavingSourceId('') }}>Hủy</button>}
                             </form>
                           )}
                           <div className="item-actions">
-                            <button type="button" className="text-button" onClick={() => { setSavingGoalId(goal.id ?? null); setSavingAmount(''); setSavingSourceId(moneySources[0]?.id === undefined ? '' : String(moneySources[0].id)) }}>+ Thêm tiền</button>
+                            <button type="button" className="text-button" onClick={() => { setSavingGoalId(goal.id ?? null); setEditingContributionId(null); setSavingAmount(''); setSavingDate(today()); setSavingSourceId(moneySources[0]?.id === undefined ? '' : String(moneySources[0].id)) }}>+ Thêm tiền</button>
                             <button type="button" className="text-button" onClick={() => editGoal(goal)}>Sửa</button>
                             {goal.id !== undefined && <button type="button" className="text-button danger-text" onClick={() => deleteGoal(goal.id!)}>Xóa</button>}
                           </div>
@@ -695,10 +911,7 @@ function App() {
                   <label>Loại nguồn tiền
                     <input required maxLength={30} list="money-source-types" value={sourceType} onChange={(event) => setSourceType(event.target.value)} placeholder="Tiền mặt, thẻ, tài khoản..." />
                     <datalist id="money-source-types">
-                      <option value="Tiền mặt" />
-                      <option value="Thẻ" />
-                      <option value="Tài khoản ngân hàng" />
-                      <option value="Ví điện tử" />
+                      {moneySourceTypes.map((type) => <option key={type} value={type} />)}
                     </datalist>
                   </label>
                   <label>Số dư ban đầu<input required type="number" min="0" step="1" value={sourceInitialBalance} onChange={(event) => setSourceInitialBalance(event.target.value)} placeholder="Nhập số tiền hiện có" /></label>
@@ -727,7 +940,7 @@ function App() {
                           <p className="money-source-starting">Số dư ban đầu: {formatMoney(source.initialBalance)}</p>
                           <div className="item-actions">
                             <button type="button" className="text-button" onClick={() => editMoneySource(source)}>Sửa</button>
-                            {source.id !== undefined && linkedTransactions === 0
+                            {source.id !== undefined && sourceActivityCount(source.id) === 0
                               ? <button type="button" className="text-button danger-text" onClick={() => deleteMoneySource(source.id!)}>Xóa</button>
                               : <span className="source-delete-note">Không thể xóa nguồn đã có giao dịch</span>}
                           </div>
@@ -740,7 +953,39 @@ function App() {
             </div>
           )}
 
-          {page === 'transactions' && (
+          {page === 'settings' && (
+            <div className="page-content">
+              <section className="content-card">
+                <SectionHeading title="Giao diện" detail="Chọn một trong năm màu nền pastel của Mochi." />
+                <div className="background-swatch-grid" role="group" aria-label="Màu nền ứng dụng">
+                  {pastelBackgrounds.map((option) => (
+                    <button
+                      className={`background-swatch-option${backgroundColor === option.value ? ' active' : ''}`}
+                      key={option.value}
+                      type="button"
+                      aria-label={`Chọn màu nền ${option.label}`}
+                      aria-pressed={backgroundColor === option.value}
+                      onClick={() => updateBackgroundColor(option.value)}
+                    >
+                      <span className="background-swatch" style={{ backgroundColor: option.value }} aria-hidden="true" />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="content-card">
+                <SectionHeading title="Tài khoản" detail="Hồ sơ Mochi đang dùng trên thiết bị này." />
+                <div className="settings-row"><span>Tên tài khoản</span><strong>{username}</strong></div>
+                <button className="secondary-button" type="button" onClick={signOut}>Đăng xuất</button>
+              </section>
+              <section className="content-card">
+                <SectionHeading title="Dữ liệu" detail="Thông tin nơi lưu dữ liệu Mochi." />
+                <p className="settings-note">Giao dịch, mục tiêu và nguồn tiền được lưu trong trình duyệt này. Xóa dữ liệu trang web có thể làm mất các thông tin đó.</p>
+              </section>
+            </div>
+          )}
+
+          {(page === 'transactions' || page === 'home') && (
             <div className="page-content">
               <section className="summary-grid" aria-label="Tổng quan giao dịch">
                 <SummaryCard label="Tổng thu nhập" value={formatMoney(totalIncome)} tone="income" />
@@ -778,22 +1023,36 @@ function App() {
                 </form>
               </section>
               <section className="dashboard-list-section">
-                <SectionHeading title="Lịch sử giao dịch" detail={`${transactions.length} giao dịch`} />
-                {transactions.length === 0 ? <EmptyState text="Chưa có giao dịch nào được ghi lại." /> : (
-                  <div className="content-card transaction-list">
-                    {transactions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((transaction) => (
-                      <article className="transaction-row" key={transaction.id}>
-                        <span className={`transaction-icon ${transaction.type}`}>{transaction.type === 'income' ? '↙' : '↗'}</span>
-                        <div className="transaction-copy"><h3>{transaction.category}</h3><p>{transaction.note || (transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu')} · {transaction.date} · {moneySources.find((source) => source.id === transaction.sourceId)?.name ?? 'Chưa chọn nguồn tiền'}</p></div>
-                        <strong className={`transaction-amount ${transaction.type}`}>{transaction.type === 'income' ? '+' : '−'}{formatMoney(transaction.amount)}</strong>
-                        <div className="item-actions">
-                          <button className="text-button" type="button" onClick={() => editTransaction(transaction)}>Sửa</button>
-                          {transaction.id !== undefined && <button className="text-button danger-text" type="button" onClick={() => deleteTransaction(transaction.id!)}>Xóa</button>}
-                        </div>
-                      </article>
-                    ))}
+                <details className="history-disclosure transaction-history" open>
+                  <summary className="history-disclosure-summary">
+                    <span className="history-disclosure-copy">
+                      <strong>Lịch sử giao dịch</strong>
+                      <small>{transactions.length} giao dịch</small>
+                    </span>
+                    <span className="history-chevron" aria-hidden="true">⌄</span>
+                  </summary>
+                  <div className="history-disclosure-content">
+                    {transactions.length === 0 ? <EmptyState text="Chưa có giao dịch nào được ghi lại." /> : (
+                      <div className="content-card transaction-list">
+                        {transactions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((transaction) => (
+                          <article className="transaction-row" key={transaction.id}>
+                            <span className={`transaction-icon ${transaction.type}`}>{transaction.type === 'income' ? '↙' : '↗'}</span>
+                            <div className="transaction-copy"><h3>{transaction.category}</h3><p>{transaction.note || (transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu')} · {transaction.date} · {moneySources.find((source) => source.id === transaction.sourceId)?.name ?? 'Chưa chọn nguồn tiền'}</p></div>
+                            <strong className={`transaction-amount ${transaction.type}`}>{transaction.type === 'income' ? '+' : '−'}{formatMoney(transaction.amount)}</strong>
+                            {transaction.isOpeningBalance || isGoalContributionTransaction(transaction.id) ? (
+                              <span className="source-delete-note">{transaction.isOpeningBalance ? 'Điều chỉnh tại nguồn tiền' : 'Điều chỉnh tại mục tiêu'}</span>
+                            ) : (
+                              <div className="item-actions">
+                                <button className="text-button" type="button" onClick={() => editTransaction(transaction)}>Sửa</button>
+                                {transaction.id !== undefined && <button className="text-button danger-text" type="button" onClick={() => deleteTransaction(transaction.id!)}>Xóa</button>}
+                              </div>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </details>
               </section>
             </div>
           )}

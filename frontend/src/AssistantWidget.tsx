@@ -6,8 +6,42 @@ type ChatMessage = {
   content: string
 }
 
+type MascotExpression = 'happy' | 'curious' | 'sleepy'
+
+type MascotPosition = { x: number; y: number; anchor: number }
+
+const MASCOT_STOP_DURATION_MS = 30_000
+const MASCOT_TRAVEL_DURATION_MS = 5_000
+
+const getRandomEdgePosition = (previousAnchor?: number): MascotPosition => {
+  const size = 70
+  const inset = 24
+  const width = Math.max(window.innerWidth, size + inset * 2)
+  const height = Math.max(window.innerHeight, size + inset * 2)
+  const right = width - size - inset
+  const bottom = height - size - inset
+  const randomBetween = (start: number, end: number) =>
+    Math.round(start + Math.max(0, end - start) * Math.random())
+  const anchors = [
+    { x: inset, y: inset },
+    { x: randomBetween(inset, Math.min(right, width * 0.35)), y: inset },
+    { x: right, y: randomBetween(inset + 100, bottom - 100) },
+    { x: right, y: bottom },
+    { x: randomBetween(width * 0.35, width * 0.65 - size), y: bottom },
+    { x: inset, y: randomBetween(inset + 100, bottom - 100) },
+  ]
+  const availableAnchors = anchors
+    .map((_, index) => index)
+    .filter((index) => index !== previousAnchor)
+  const anchor = availableAnchors[Math.floor(Math.random() * availableAnchors.length)]
+  return { ...anchors[anchor], anchor }
+}
+
 function AssistantWidget({ username }: { username: string }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isMascotPaused, setIsMascotPaused] = useState(false)
+  const [mascotPosition, setMascotPosition] = useState(getRandomEdgePosition)
+  const [mascotExpression, setMascotExpression] = useState<MascotExpression>('happy')
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -18,10 +52,27 @@ function AssistantWidget({ username }: { username: string }) {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const conversationEndRef = useRef<HTMLDivElement>(null)
+  const mascotRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isSending])
+
+  useEffect(() => {
+    if (isOpen || isMascotPaused) return
+    const timer = window.setTimeout(() => {
+      setMascotPosition((position) => getRandomEdgePosition(position.anchor))
+    }, MASCOT_STOP_DURATION_MS + MASCOT_TRAVEL_DURATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [isOpen, isMascotPaused, mascotPosition.anchor])
+
+  const pauseMascot = () => {
+    const bounds = mascotRef.current?.getBoundingClientRect()
+    if (bounds) {
+      setMascotPosition((position) => ({ ...position, x: bounds.left, y: bounds.top }))
+    }
+    setIsMascotPaused(true)
+  }
 
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -68,7 +119,7 @@ function AssistantWidget({ username }: { username: string }) {
       {isOpen && (
         <section className="assistant-panel" aria-label="Trò chuyện với Mochi">
           <header className="assistant-header">
-            <div className="assistant-header-avatar" aria-hidden="true">🐣</div>
+            <div className="assistant-header-avatar"><SlimeMascot expression={mascotExpression} /></div>
             <div className="assistant-header-copy">
               <h2>Mochi</h2>
               <p>Trợ lý của bạn</p>
@@ -76,7 +127,7 @@ function AssistantWidget({ username }: { username: string }) {
             <button
               className="assistant-close"
               type="button"
-              onClick={() => setIsOpen(false)}
+              onClick={() => { setIsOpen(false); setIsMascotPaused(false) }}
               aria-label="Đóng khung chat"
             >
               ×
@@ -118,15 +169,37 @@ function AssistantWidget({ username }: { username: string }) {
       )}
 
       <button
-        className="assistant-mascot"
+        ref={mascotRef}
+        className={`assistant-mascot${isOpen ? ' is-open' : ''}${isMascotPaused ? ' is-paused' : ''}`}
+        style={{ left: `${mascotPosition.x}px`, top: `${mascotPosition.y}px` }}
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          setIsOpen((open) => !open)
+          setIsMascotPaused(true)
+          setMascotExpression((current) => current === 'happy' ? 'curious' : current === 'curious' ? 'sleepy' : 'happy')
+        }}
+        onPointerEnter={pauseMascot}
+        onPointerLeave={() => setIsMascotPaused(false)}
+        onPointerDown={pauseMascot}
+        onFocus={pauseMascot}
+        onBlur={() => setIsMascotPaused(false)}
         aria-label={isOpen ? 'Đóng trò chuyện với Mochi' : 'Trò chuyện với Mochi'}
         aria-expanded={isOpen}
       >
-        <span aria-hidden="true">🐣</span>
+        <SlimeMascot expression={mascotExpression} />
       </button>
     </div>
+  )
+}
+
+function SlimeMascot({ expression }: { expression: MascotExpression }) {
+  return (
+    <span className={`assistant-slime assistant-slime-${expression}`} aria-hidden="true">
+      <span className="assistant-slime-eye assistant-slime-eye-left" />
+      <span className="assistant-slime-eye assistant-slime-eye-right" />
+      <span className="assistant-slime-mouth" />
+      <span className="assistant-slime-blush" />
+    </span>
   )
 }
 
