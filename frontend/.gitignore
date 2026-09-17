@@ -32,3 +32,9 @@ build/
 
 # OS
 Thumbs.db
+
+# Claude
+.claude/
+.env
+.env.local
+
