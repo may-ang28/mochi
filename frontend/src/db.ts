@@ -37,15 +37,17 @@ export class MochiDB extends Dexie {
   budgets!: Table<Budget, number>
   goals!: Table<Goal, number>
   tasks!: Table<Task, number>
+  points!: Table<{ id?: number; total: number }, number>
 
   constructor() {
     super('MochiDB')
 
-    this.version(1).stores({
+    this.version(2).stores({
   transactions: '++id, type, category, date',
   budgets: '++id, category, month',
   goals: '++id, name, deadline',
   tasks: '++id, completed, date',
+  points: '++id',
     })
   }
 }

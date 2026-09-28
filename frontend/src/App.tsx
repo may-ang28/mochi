@@ -26,6 +26,7 @@ const [budgetMonth, setBudgetMonth] = useState(
 const [budgets, setBudgets] = useState<Budget[]>([])
 const [goals, setGoals] = useState<Goal[]>([])
 const [tasks, setTasks] = useState<Task[]>([])
+const [mochiPoints, setMochiPoints] = useState(0)
 const [goalName, setGoalName] = useState('')
 const [goalTargetAmount, setGoalTargetAmount] = useState('')
 const [goalSavedAmount, setGoalSavedAmount] = useState('')
@@ -69,6 +70,11 @@ const addGoal = async () => {
 
   const allGoals = await db.goals.toArray()
   const allTasks = await db.tasks.toArray()
+  const savedPoints = await db.points.get(1)
+
+if (savedPoints) {
+  setMochiPoints(savedPoints.total)
+}
 
   setGoals(allGoals)
   setTasks(allTasks)
@@ -92,9 +98,24 @@ const addTask = async () => {
 }
 
 const completeTask = async (id: number) => {
+  const task = await db.tasks.get(id)
+
+  if (!task || task.completed) {
+    return
+  }
+
   await db.tasks.update(id, {
     completed: true,
   })
+
+  const newPoints = mochiPoints + task.reward
+
+setMochiPoints(newPoints)
+
+await db.points.put({
+  id: 1,
+  total: newPoints,
+})
 
   const allTasks = await db.tasks.toArray()
   setTasks(allTasks)
@@ -291,16 +312,24 @@ useEffect(() => {
     const allTransactions = await db.transactions.toArray()
     const allBudgets = await db.budgets.toArray()
     const allGoals = await db.goals.toArray()
+    const allTasks = await db.tasks.toArray()
+    const savedPoints = await db.points.get(1)
 
     setTransactions(allTransactions)
     setBudgets(allBudgets)
     setGoals(allGoals)
-const savedTotal = allGoals.reduce(
-  (sum, goal) => sum + goal.savedAmount,
-  0
-)
+    setTasks(allTasks)
 
-setTotalSaved(savedTotal)
+    const savedTotal = allGoals.reduce(
+      (sum, goal) => sum + goal.savedAmount,
+      0
+    )
+
+    setTotalSaved(savedTotal)
+
+    if (savedPoints) {
+      setMochiPoints(savedPoints.total)
+    }
   }
 
   loadData()
@@ -311,6 +340,10 @@ setTotalSaved(savedTotal)
       <h1 className="text-4xl font-bold text-pink-500">
         Mochi 🍡
       </h1>
+
+      <div className="mt-3 rounded-xl bg-white px-4 py-3 shadow">
+  ⭐ Mochi Points: <span className="font-bold">{mochiPoints}</span>
+</div>
 
       <p className="mt-2 text-gray-600">
         Database đang hoạt động!
