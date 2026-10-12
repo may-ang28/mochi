@@ -13,10 +13,10 @@
 .assistant-mascot {
   position: fixed;
   z-index: 1;
-  top: 24px;
-  left: 24px;
-  right: auto;
-  bottom: auto;
+  top: auto;
+  right: 24px;
+  bottom: 24px;
+  left: auto;
   display: grid;
   width: 70px;
   height: 70px;
@@ -25,7 +25,7 @@
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
-  transition: left 5s cubic-bezier(0.3, 0.65, 0.35, 1), top 5s cubic-bezier(0.3, 0.65, 0.35, 1), filter 180ms ease;
+  transition: filter 180ms ease;
 }
 
 .assistant-mascot:hover {
@@ -340,8 +340,8 @@
   }
 
   .assistant-mascot {
-    left: 16px;
-    top: 16px;
+    right: 16px;
+    bottom: 16px;
   }
 
   .assistant-panel {
