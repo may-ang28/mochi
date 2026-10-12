@@ -32,6 +32,7 @@ export interface Goal {
   targetAmount: number
   savedAmount: number
   deadline: string
+  taskRewarded?: boolean
 }
 
 export interface GoalContribution {
@@ -49,6 +50,8 @@ export interface Task {
   completed: boolean
   reward: number
   date: string
+  completedAt?: string
+  goalId?: number
 }
 
 export class MochiDB extends Dexie {

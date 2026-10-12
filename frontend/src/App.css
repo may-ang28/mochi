@@ -281,6 +281,20 @@ button {
   margin: 0 0 34px 8px;
 }
 
+.mochi-logo-home {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mochi-logo-home:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid #c66a8f;
+  outline-offset: 4px;
+}
+
 .sidebar-primary-nav,
 .sidebar-secondary-nav {
   display: grid;
@@ -353,6 +367,58 @@ button {
 .sidebar-signout:hover {
   background: #fff3f4;
   color: #a94e75;
+}
+
+.task-points-bubble {
+  position: fixed;
+  z-index: 58;
+  bottom: 22px;
+  left: 248px;
+  display: flex;
+  min-width: 96px;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 15px;
+  border: 1px solid #efdaa9;
+  border-radius: 999px;
+  background: #fffaf0;
+  box-shadow: 0 8px 22px rgb(98 72 37 / 16%);
+  color: #765828;
+  cursor: pointer;
+  animation: task-points-pop 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.task-points-bubble:hover {
+  box-shadow: 0 10px 26px rgb(98 72 37 / 22%);
+}
+
+.dashboard-collapsed .task-points-bubble {
+  left: 22px;
+}
+
+.task-points-star {
+  color: #e7ae48;
+  font-size: 20px;
+  text-shadow: 0 2px 0 #f7e6bd;
+}
+
+.task-points-bubble strong {
+  font-size: 15px;
+}
+
+.task-points-unit {
+  color: #a1885f;
+  font-size: 10px;
+}
+
+.task-points-spark {
+  position: absolute;
+  top: -8px;
+  right: -2px;
+  color: #e2ac47;
+  font-size: 13px;
 }
 
 .workspace-main {
@@ -472,6 +538,304 @@ button {
 .home-streak > div:nth-child(2) span {
   color: #829188;
   font-size: 12px;
+}
+
+.mochi-dresser {
+  margin: 2px 0 20px;
+  padding: 17px 19px 18px;
+  overflow: hidden;
+  border: 1px solid #d9eadf;
+  border-radius: 14px;
+  background: #f2faf4;
+}
+
+.mochi-dresser-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mochi-dresser-heading .dashboard-eyebrow {
+  margin-bottom: 4px;
+  color: #759780;
+  font-size: 9px;
+}
+
+.mochi-dresser-heading h2 {
+  margin: 0;
+  color: #40594a;
+  font-size: 17px;
+}
+
+.dresser-level {
+  padding: 6px 9px;
+  border: 1px solid #d9eadf;
+  border-radius: 999px;
+  background: #fff;
+  color: #70927a;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.mochi-dresser-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.78fr) minmax(0, 1.6fr);
+  gap: 18px;
+}
+
+.wardrobe-stage {
+  position: relative;
+  display: grid;
+  min-height: 268px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #d6e8db;
+  border-radius: 12px;
+  background-color: #e9f5ec;
+  background-image: radial-gradient(#c7dfce 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.wardrobe-stage::after {
+  position: absolute;
+  right: 12%;
+  bottom: 44px;
+  left: 12%;
+  height: 1px;
+  background: #bfd8c6;
+  content: '';
+}
+
+.wardrobe-mochi {
+  position: relative;
+  display: grid;
+  width: 174px;
+  height: 194px;
+  place-items: center;
+  z-index: 1;
+}
+
+.wardrobe-mochi .assistant-slime {
+  width: 124px;
+  height: 108px;
+  border-width: 3px;
+  animation: none;
+  transform: translateY(-7px);
+}
+
+.wardrobe-mochi .assistant-slime-eye {
+  top: 40px;
+  width: 7px;
+  height: 10px;
+}
+
+.wardrobe-mochi .assistant-slime-eye-left {
+  left: 37px;
+}
+
+.wardrobe-mochi .assistant-slime-eye-right {
+  right: 37px;
+}
+
+.wardrobe-mochi .assistant-slime-mouth {
+  top: 61px;
+  left: 54px;
+  width: 14px;
+  height: 8px;
+  border-width: 3px;
+}
+
+.wardrobe-mochi .assistant-slime-blush {
+  top: 62px;
+  left: 20px;
+  width: 14px;
+  height: 7px;
+  box-shadow: 66px 0 rgb(222 91 137 / 38%);
+}
+
+.wardrobe-mochi .assistant-slime-curious .assistant-slime-eye-right {
+  height: 14px;
+  transform: translateY(-4px);
+}
+
+.wardrobe-mochi .assistant-slime-curious .assistant-slime-mouth {
+  top: 55px;
+  left: 57px;
+  width: 11px;
+  height: 11px;
+  border: 3px solid #754254;
+  border-radius: 50%;
+}
+
+.wardrobe-mochi .assistant-slime-sleepy .assistant-slime-eye {
+  top: 45px;
+  width: 14px;
+  height: 3px;
+}
+
+.wardrobe-mochi .assistant-slime-sleepy .assistant-slime-eye-left {
+  left: 33px;
+}
+
+.wardrobe-mochi .assistant-slime-sleepy .assistant-slime-eye-right {
+  right: 33px;
+}
+
+.wardrobe-mochi .assistant-slime-sleepy .assistant-slime-mouth {
+  top: 63px;
+  left: 56px;
+  width: 12px;
+  height: 4px;
+  border: 0;
+  border-bottom: 3px solid #754254;
+  border-radius: 50%;
+}
+
+.wardrobe-wearable {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 2px rgb(69 92 76 / 14%));
+}
+
+.wardrobe-hat {
+  top: 19px;
+  left: 50%;
+  font-size: 36px;
+  transform: translateX(-50%) rotate(-7deg);
+}
+
+.wardrobe-clip {
+  top: 67px;
+  left: calc(50% + 42px);
+  font-size: 22px;
+}
+
+.wardrobe-mochi.color-pink .assistant-slime {
+  background: linear-gradient(145deg, #ffb7d1 4%, #ff91b8 52%, #ed6e9b 100%);
+}
+
+.wardrobe-mochi.color-mint .assistant-slime {
+  background: linear-gradient(145deg, #b9efd2 4%, #74c8a1 52%, #439875 100%);
+}
+
+.wardrobe-mochi.color-sunshine .assistant-slime {
+  background: linear-gradient(145deg, #ffe7a6 4%, #f2c45e 52%, #d49a36 100%);
+}
+
+.wardrobe-mochi.color-sky .assistant-slime {
+  background: linear-gradient(145deg, #c4e4ff 4%, #7eb9e8 52%, #4e8dc1 100%);
+}
+
+.wardrobe-mochi.color-lilac .assistant-slime {
+  background: linear-gradient(145deg, #e0d0ff 4%, #ad91db 52%, #8065b1 100%);
+}
+
+.wardrobe-mochi.color-peach .assistant-slime {
+  background: linear-gradient(145deg, #ffd0b8 4%, #f29a78 52%, #d66e4e 100%);
+}
+
+.wardrobe-stage-caption {
+  position: absolute;
+  z-index: 2;
+  bottom: 12px;
+  left: 50%;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 82%);
+  color: #698271;
+  font-size: 9px;
+  font-weight: 700;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.wardrobe-tray {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.wardrobe-slot {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dfede3;
+}
+
+.wardrobe-slot h3 {
+  margin: 0;
+  color: #5b7462;
+  font-size: 11px;
+}
+
+.wardrobe-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.wardrobe-color-options {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.wardrobe-expression-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 270px;
+}
+
+.wardrobe-option {
+  display: grid;
+  min-width: 0;
+  min-height: 55px;
+  place-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #718578;
+  cursor: pointer;
+}
+
+.wardrobe-option:hover,
+.wardrobe-option.active {
+  border-color: #b9d7c1;
+  background: #fff;
+  box-shadow: 0 3px 8px rgb(83 126 94 / 10%);
+}
+
+.wardrobe-option > span {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.wardrobe-color-option > span {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(72 91 77 / 18%);
+}
+
+.wardrobe-option small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wardrobe-option:focus-visible,
+.task-points-bubble:focus-visible {
+  outline: 2px solid #568766;
+  outline-offset: 3px;
 }
 
 .streak-dots {
@@ -1276,6 +1640,22 @@ button {
   }
 }
 
+@keyframes task-points-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.82);
+  }
+
+  68% {
+    transform: translateY(-3px) scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 760px) {
   .dashboard-toggle {
     top: 10px;
@@ -1384,6 +1764,20 @@ button {
     display: none;
   }
 
+  .task-points-bubble,
+  .dashboard-collapsed .task-points-bubble {
+    bottom: 14px;
+    left: 12px;
+  }
+
+  .mochi-dresser-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wardrobe-stage {
+    min-height: 230px;
+  }
+
   .budget-expense-chat {
     top: auto;
     bottom: 4px;
@@ -1436,6 +1830,28 @@ button {
   .home-streak {
     gap: 9px;
     padding: 11px;
+  }
+
+  .mochi-dresser {
+    padding: 13px 11px;
+  }
+
+  .wardrobe-slot {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px 3px;
+  }
+
+  .wardrobe-options {
+    gap: 3px;
+  }
+
+  .wardrobe-color-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wardrobe-option {
+    min-height: 50px;
   }
 
   .home-streak > div:nth-child(2) span {
@@ -2241,6 +2657,10 @@ button {
 .task-completed .task-copy h3 {
   color: #8a9b8e;
   text-decoration: line-through;
+}
+
+.task-delete-button {
+  flex: 0 0 auto;
 }
 
 .summary-grid {

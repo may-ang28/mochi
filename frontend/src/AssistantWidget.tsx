@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { MascotExpression } from './mascot'
 import './AssistantWidget.css'
 
 type ChatMessage = {
@@ -6,18 +7,25 @@ type ChatMessage = {
   content: string
 }
 
-type MascotExpression = 'happy' | 'curious' | 'sleepy'
+type MascotAppearance = {
+  color: string
+  expression: MascotExpression
+  hat: string
+  clip: string
+}
 
 function AssistantWidget({
   username,
   isOpen,
   onOpenChange,
+  appearance,
 }: {
   username: string
   isOpen: boolean
   onOpenChange: (open: boolean) => void
+  appearance: MascotAppearance
 }) {
-  const [mascotExpression, setMascotExpression] = useState<MascotExpression>('happy')
+  const mascotExpression = appearance.expression
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -78,7 +86,7 @@ function AssistantWidget({
       {isOpen && (
         <section className="assistant-panel" aria-label="Trò chuyện với Mochi">
           <header className="assistant-header">
-            <div className="assistant-header-avatar"><SlimeMascot expression={mascotExpression} /></div>
+            <div className="assistant-header-avatar"><SlimeMascot expression={mascotExpression} appearance={appearance} /></div>
             <div className="assistant-header-copy">
               <h2>Mochi</h2>
               <p>Trợ lý của bạn</p>
@@ -130,26 +138,30 @@ function AssistantWidget({
       <button
         className={`assistant-mascot${isOpen ? ' is-open' : ''}`}
         type="button"
-        onClick={() => {
-          onOpenChange(!isOpen)
-          setMascotExpression((current) => current === 'happy' ? 'curious' : current === 'curious' ? 'sleepy' : 'happy')
-        }}
+        onClick={() => onOpenChange(!isOpen)}
         aria-label={isOpen ? 'Đóng trò chuyện với Mochi' : 'Trò chuyện với Mochi'}
         aria-expanded={isOpen}
       >
-        <SlimeMascot expression={mascotExpression} />
+        <SlimeMascot expression={mascotExpression} appearance={appearance} />
       </button>
     </div>
   )
 }
 
-function SlimeMascot({ expression }: { expression: MascotExpression }) {
+function SlimeMascot({ expression, appearance }: { expression: MascotExpression; appearance: MascotAppearance }) {
+  const hatIcon = ({ cap: '🧢', crown: '👑', berry: '🍓' } as Record<string, string>)[appearance.hat]
+  const clipIcon = ({ bow: '🎀', flower: '🌼', star: '⭐' } as Record<string, string>)[appearance.clip]
+
   return (
-    <span className={`assistant-slime assistant-slime-${expression}`} aria-hidden="true">
-      <span className="assistant-slime-eye assistant-slime-eye-left" />
-      <span className="assistant-slime-eye assistant-slime-eye-right" />
-      <span className="assistant-slime-mouth" />
-      <span className="assistant-slime-blush" />
+    <span className={`assistant-mascot-character color-${appearance.color}`} aria-hidden="true">
+      {hatIcon && <span className="assistant-mascot-accessory hat">{hatIcon}</span>}
+      <span className={`assistant-slime assistant-slime-${expression}`}>
+        <span className="assistant-slime-eye assistant-slime-eye-left" />
+        <span className="assistant-slime-eye assistant-slime-eye-right" />
+        <span className="assistant-slime-mouth" />
+        <span className="assistant-slime-blush" />
+      </span>
+      {clipIcon && <span className="assistant-mascot-accessory clip">{clipIcon}</span>}
     </span>
   )
 }

@@ -9,6 +9,7 @@ import {
   type Transaction,
 } from './db'
 import AssistantWidget from './AssistantWidget'
+import { mascotExpressions, type MascotExpression } from './mascot'
 import {
   createLocalAccount,
   getLocalAccount,
@@ -18,7 +19,39 @@ import {
 } from './auth'
 import './App.css'
 
-type Page = 'home' | 'charts' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
+type Page = 'home' | 'charts' | 'wardrobe' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
+
+type AccessorySlot = 'clip' | 'hat'
+type MochiOutfit = Record<AccessorySlot, string> & { color: string; expression: MascotExpression }
+
+const accessorySlots: { id: AccessorySlot; label: string; options: { id: string; label: string; icon: string }[] }[] = [
+  { id: 'clip', label: 'Kẹp tóc', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'bow', label: 'Nơ', icon: '🎀' }, { id: 'flower', label: 'Hoa', icon: '🌼' }, { id: 'star', label: 'Sao', icon: '⭐' }] },
+  { id: 'hat', label: 'Mũ', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'cap', label: 'Mũ', icon: '🧢' }, { id: 'crown', label: 'Vương miện', icon: '👑' }, { id: 'berry', label: 'Mũ dâu', icon: '🍓' }] },
+]
+const mochiColors = [
+  { id: 'pink', label: 'Hồng mochi', color: '#ff91b8' },
+  { id: 'mint', label: 'Bạc hà', color: '#74c8a1' },
+  { id: 'sunshine', label: 'Nắng', color: '#f2c45e' },
+  { id: 'sky', label: 'Xanh trời', color: '#7eb9e8' },
+  { id: 'lilac', label: 'Tử đinh hương', color: '#ad91db' },
+  { id: 'peach', label: 'Đào', color: '#f29a78' },
+]
+const readMochiOutfit = (): MochiOutfit => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mochi-outfit') ?? '{}') as Partial<MochiOutfit>
+    const accessories = Object.fromEntries(accessorySlots.map(({ id, options }) => {
+      const savedValue = saved[id]
+      return [id, options.some((option) => option.id === savedValue) ? savedValue : 'none']
+    })) as Record<AccessorySlot, string>
+    return {
+      ...accessories,
+      color: mochiColors.some((option) => option.id === saved.color) ? saved.color! : 'pink',
+      expression: mascotExpressions.some((option) => option.id === saved.expression) ? saved.expression! : 'happy',
+    }
+  } catch {
+    return { clip: 'none', hat: 'none', color: 'pink', expression: 'happy' }
+  }
+}
 
 function MochiWordmark({ compact = false }: { compact?: boolean }) {
   return (
@@ -37,6 +70,7 @@ function MochiWordmark({ compact = false }: { compact?: boolean }) {
 
 const navigation: { id: Page; label: string; icon: string; description: string }[] = [
   { id: 'charts', label: 'Biểu đồ', icon: '◒', description: 'Tổng quan dòng tiền' },
+  { id: 'wardrobe', label: 'Tủ đồ', icon: '🧢', description: 'Chọn phụ kiện cho Mochi' },
   { id: 'budgets', label: 'Ngân sách', icon: '💰', description: 'Theo dõi hạn mức chi tiêu' },
   { id: 'goals', label: 'Mục tiêu', icon: '🎯', description: 'Lên kế hoạch tiết kiệm' },
   { id: 'tasks', label: 'Nhiệm vụ', icon: '📝', description: 'Hoàn thành việc nhỏ mỗi ngày' },
@@ -126,6 +160,8 @@ function App() {
   const [page, setPage] = useState<Page>('home')
   const [isDashboardOpen, setIsDashboardOpen] = useState(true)
   const [backgroundColor, setBackgroundColor] = useState(getInitialBackgroundColor)
+  const [savedMochiOutfit, setSavedMochiOutfit] = useState<MochiOutfit>(readMochiOutfit)
+  const [mochiOutfit, setMochiOutfit] = useState<MochiOutfit>(savedMochiOutfit)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [isSplashVisible, setIsSplashVisible] = useState(true)
   const [sourceFilter, setSourceFilter] = useState('Tổng')
@@ -146,8 +182,12 @@ function App() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskReward, setTaskReward] = useState('10')
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [moneySources, setMoneySources] = useState<MoneySource[]>([])
   const [mochiPoints, setMochiPoints] = useState(0)
+  const [pointsPulse, setPointsPulse] = useState(0)
   const [error, setError] = useState('')
   const [isDataLoading, setIsDataLoading] = useState(storedAuth.username !== null)
 
@@ -272,6 +312,26 @@ function App() {
   const refreshTasks = async () => setTasks(await db.tasks.toArray())
   const refreshMoneySources = async () => setMoneySources(await db.moneySources.toArray())
 
+  useEffect(() => {
+    if (!username) return
+    const completedTasks = tasks.filter((task) => task.completed && task.id !== undefined)
+    if (completedTasks.length === 0) return
+
+    const taskExpiry = (task: Task) => Date.parse(task.completedAt ?? `${task.date}T23:59:59`) + 3 * 24 * 60 * 60 * 1000
+    const nextExpiry = Math.min(...completedTasks.map(taskExpiry))
+    const timer = window.setTimeout(() => {
+      const expiredIds = completedTasks
+        .filter((task) => taskExpiry(task) <= Date.now())
+        .map((task) => task.id!)
+      if (expiredIds.length === 0) return
+      void db.tasks.bulkDelete(expiredIds).then(async () => setTasks(await db.tasks.toArray())).catch((taskError: unknown) => {
+        setError(taskError instanceof Error ? taskError.message : 'Không thể xóa nhiệm vụ đã hết hạn.')
+      })
+    }, Math.max(0, nextExpiry - Date.now()))
+
+    return () => window.clearTimeout(timer)
+  }, [tasks, username])
+
   const runAction = async (action: () => Promise<void>) => {
     setError('')
     try {
@@ -288,6 +348,32 @@ function App() {
       localStorage.setItem(BACKGROUND_COLOR_KEY, color)
     } catch {
       setError('Không thể lưu màu nền trên thiết bị này.')
+    }
+  }
+
+  const updateMochiOutfit = (slot: AccessorySlot, accessoryId: string) => {
+    setMochiOutfit((current) => ({ ...current, [slot]: accessoryId }))
+  }
+
+  const updateMochiColor = (color: string) => {
+    if (!mochiColors.some((option) => option.id === color)) return
+    setMochiOutfit((current) => ({ ...current, color }))
+  }
+
+  const updateMochiExpression = (expression: MascotExpression) => {
+    setMochiOutfit((current) => ({ ...current, expression }))
+  }
+
+  const outfitHasChanges = accessorySlots.some((slot) => mochiOutfit[slot.id] !== savedMochiOutfit[slot.id]) ||
+    mochiOutfit.color !== savedMochiOutfit.color || mochiOutfit.expression !== savedMochiOutfit.expression
+
+  const saveMochiOutfit = () => {
+    try {
+      localStorage.setItem('mochi-outfit', JSON.stringify(mochiOutfit))
+      setSavedMochiOutfit({ ...mochiOutfit })
+      setError('')
+    } catch {
+      setError('Không thể lưu diện mạo Mochi trên thiết bị này.')
     }
   }
 
@@ -541,9 +627,11 @@ function App() {
         throw new Error('Hãy chọn một nguồn tiền hợp lệ cho khoản tiết kiệm.')
       }
 
-      await db.transaction('rw', db.goals, db.goalContributions, db.transactions, async () => {
+      let pointsAfterGoalCompletion: number | undefined
+      await db.transaction('rw', db.goals, db.goalContributions, db.transactions, db.tasks, db.points, async () => {
         const goal = await db.goals.get(goalId)
         if (!goal) throw new Error('Không tìm thấy mục tiêu tiết kiệm.')
+        let updatedSavedAmount: number
 
         const transaction = {
           type: 'expense',
@@ -557,7 +645,7 @@ function App() {
         if (editingContributionId === null) {
           const transactionId = await db.transactions.add(transaction)
           await db.goalContributions.add({ goalId, amount: value, date: savingDate, sourceId, transactionId })
-          await db.goals.update(goalId, { savedAmount: goal.savedAmount + value })
+          updatedSavedAmount = goal.savedAmount + value
         } else {
           const contribution = await db.goalContributions.get(editingContributionId)
           if (!contribution || contribution.goalId !== goalId) {
@@ -574,10 +662,29 @@ function App() {
             sourceId,
             transactionId,
           })
-          await db.goals.update(goalId, { savedAmount: goal.savedAmount - contribution.amount + value })
+          updatedSavedAmount = goal.savedAmount - contribution.amount + value
+        }
+
+        await db.goals.update(goalId, { savedAmount: updatedSavedAmount })
+        if (updatedSavedAmount >= goal.targetAmount) {
+          const linkedTasks = (await db.tasks.toArray()).filter((task) => task.goalId === goalId && !task.completed && task.id !== undefined)
+          if (linkedTasks.length > 0) {
+            const completedAt = new Date().toISOString()
+            for (const task of linkedTasks) {
+              await db.tasks.update(task.id!, { completed: true, completedAt })
+            }
+            await db.goals.update(goalId, { taskRewarded: true })
+            pointsAfterGoalCompletion = (await db.points.get(1))?.total ?? 0
+            pointsAfterGoalCompletion += linkedTasks.reduce((reward, task) => reward + task.reward, 0)
+            await db.points.put({ id: 1, total: pointsAfterGoalCompletion })
+          }
         }
       })
-      await Promise.all([refreshGoals(), refreshGoalContributions(), refreshTransactions()])
+      if (pointsAfterGoalCompletion !== undefined) {
+        setMochiPoints(pointsAfterGoalCompletion)
+        setPointsPulse((pulse) => pulse + 1)
+      }
+      await Promise.all([refreshGoals(), refreshGoalContributions(), refreshTransactions(), refreshTasks()])
       setSavingGoalId(null)
       setEditingContributionId(null)
       setSavingAmount('')
@@ -619,27 +726,87 @@ function App() {
     })
   }
 
-  const addTask = () => {
+  const addTask = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     void runAction(async () => {
+      const title = taskTitle.trim()
+      const reward = Number(taskReward)
+      if (!title) throw new Error('Hãy nhập tên nhiệm vụ.')
+      if (!Number.isSafeInteger(reward) || reward <= 0) throw new Error('Điểm thưởng cần là số nguyên lớn hơn 0.')
       await db.tasks.add({
-        title: 'Ghi lại chi tiêu hôm nay',
+        title,
         completed: false,
-        reward: 10,
+        reward,
         date: today(),
       })
       await refreshTasks()
+      setTaskTitle('')
+      setTaskReward('10')
+      setIsTaskFormOpen(false)
     })
   }
 
   const completeTask = (task: Task) => {
     if (task.id === undefined || task.completed) return
     void runAction(async () => {
-      const points = mochiPoints + task.reward
+      let points: number | undefined
       await db.transaction('rw', db.tasks, db.points, async () => {
-        await db.tasks.update(task.id!, { completed: true })
+        const currentTask = await db.tasks.get(task.id!)
+        if (!currentTask || currentTask.completed) return
+        await db.tasks.update(task.id!, { completed: true, completedAt: new Date().toISOString() })
+        points = (await db.points.get(1))?.total ?? 0
+        points += currentTask.reward
         await db.points.put({ id: 1, total: points })
       })
-      setMochiPoints(points)
+      if (points !== undefined) {
+        setMochiPoints(points)
+        setPointsPulse((pulse) => pulse + 1)
+      }
+      await refreshTasks()
+    })
+  }
+
+  const deleteTask = (task: Task) => {
+    if (task.id === undefined) return
+    void runAction(async () => {
+      await db.tasks.delete(task.id!)
+      await refreshTasks()
+    })
+  }
+
+  const createGoalTask = (goal: Goal) => {
+    if (goal.id === undefined) return
+    void runAction(async () => {
+      let points: number | undefined
+      await db.transaction('rw', db.goals, db.tasks, db.points, async () => {
+        const currentGoal = await db.goals.get(goal.id!)
+        if (!currentGoal || currentGoal.taskRewarded) return
+        const existingTasks = (await db.tasks.toArray()).filter((task) => task.goalId === currentGoal.id)
+        if (existingTasks.length > 0) return
+
+        const completed = currentGoal.savedAmount >= currentGoal.targetAmount
+        const completedAt = completed ? new Date().toISOString() : undefined
+        const taskId = await db.tasks.add({
+          title: `Hoàn thành mục tiêu: ${currentGoal.name}`,
+          completed,
+          reward: 25,
+          date: today(),
+          goalId: currentGoal.id,
+          ...(completedAt ? { completedAt } : {}),
+        })
+
+        if (completed) {
+          points = ((await db.points.get(1))?.total ?? 0) + 25
+          await db.points.put({ id: 1, total: points })
+          await db.goals.update(currentGoal.id!, { taskRewarded: true })
+          await db.tasks.update(taskId, { completedAt })
+        }
+      })
+      if (points !== undefined) {
+        setMochiPoints(points)
+        setPointsPulse((pulse) => pulse + 1)
+        await refreshGoals()
+      }
       await refreshTasks()
     })
   }
@@ -938,15 +1105,18 @@ function App() {
         </button>
 
         <aside className="mochi-sidebar" id="mochi-navigation" aria-hidden={!isDashboardOpen}>
-          <div className="mochi-logo-slot" aria-hidden="true">
+          <button className="mochi-logo-slot mochi-logo-home" type="button" aria-label="Mochi - về trang chủ" onClick={() => setPage('home')}>
             <MochiWordmark compact />
-          </div>
+          </button>
           <nav className="sidebar-primary-nav" aria-label="Điều hướng chính">
             <button className={`sidebar-nav-item${page === 'home' ? ' active' : ''}`} type="button" onClick={() => setPage('home')}>
               <span aria-hidden="true">⌂</span> Home
             </button>
             <button className={`sidebar-nav-item${page === 'charts' ? ' active' : ''}`} type="button" onClick={() => setPage('charts')}>
               <span aria-hidden="true">◒</span> Charts
+            </button>
+            <button className={`sidebar-nav-item${page === 'wardrobe' ? ' active' : ''}`} type="button" onClick={() => setPage('wardrobe')}>
+              <span aria-hidden="true">🧢</span> Tủ đồ
             </button>
             <button className="sidebar-nav-item" type="button" onClick={() => setAssistantOpen(true)}>
               <span aria-hidden="true">✳</span> AI assistant
@@ -955,7 +1125,7 @@ function App() {
           <div className="sidebar-divider" />
           <p className="sidebar-section-label">QUẢN LÝ</p>
           <nav className="sidebar-secondary-nav" aria-label="Quản lý tài chính">
-            {navigation.filter((item) => !['charts', 'settings'].includes(item.id)).map((item) => (
+            {navigation.filter((item) => !['charts', 'wardrobe', 'settings'].includes(item.id)).map((item) => (
               <button
                 className={`sidebar-nav-item${page === item.id ? ' active' : ''}`}
                 key={item.id}
@@ -1301,6 +1471,99 @@ function App() {
                 </div>
               )}
 
+              {page === 'wardrobe' && (
+                <div className="page-content">
+                  <section className="mochi-dresser" aria-label="Thiết kế phụ kiện cho Mochi">
+                    <header className="mochi-dresser-heading">
+                      <div>
+                        <p className="dashboard-eyebrow">PHÒNG THAY ĐỒ</p>
+                        <h2>Phối đồ cho Mochi</h2>
+                      </div>
+                      <button className="primary-button wardrobe-save-button" type="button" onClick={saveMochiOutfit} disabled={!outfitHasChanges}>
+                        {outfitHasChanges ? 'Lưu Mochi' : 'Đã lưu'}
+                      </button>
+                    </header>
+                    <div className="mochi-dresser-layout">
+                      <div className="wardrobe-stage" aria-label="Mochi với màu sắc và phụ kiện đã chọn">
+                        {(['hat', 'clip'] as AccessorySlot[]).map((slot) => {
+                          const accessory = accessorySlots.find((item) => item.id === slot)?.options.find((item) => item.id === mochiOutfit[slot])
+                          return accessory && accessory.id !== 'none'
+                            ? <span className={`wardrobe-wearable wardrobe-${slot}`} key={slot}>{accessory.icon}</span>
+                            : null
+                        })}
+                        <div className={`wardrobe-mochi color-${mochiOutfit.color}`}>
+                          <span className={`assistant-slime assistant-slime-${mochiOutfit.expression}`} aria-hidden="true">
+                            <span className="assistant-slime-eye assistant-slime-eye-left" />
+                            <span className="assistant-slime-eye assistant-slime-eye-right" />
+                            <span className="assistant-slime-mouth" />
+                            <span className="assistant-slime-blush" />
+                          </span>
+                        </div>
+                        <span className="wardrobe-stage-caption">Mochi · cấp 1</span>
+                      </div>
+                      <div className="wardrobe-tray">
+                        {accessorySlots.map((slot) => (
+                          <div className="wardrobe-slot" key={slot.id} role="group" aria-label={`Chọn ${slot.label}`}>
+                            <h3>{slot.label}</h3>
+                            <div className="wardrobe-options">
+                              {slot.options.map((option) => (
+                                <button
+                                  className={`wardrobe-option${mochiOutfit[slot.id] === option.id ? ' active' : ''}`}
+                                  key={option.id}
+                                  type="button"
+                                  aria-label={`${slot.label}: ${option.label}`}
+                                  aria-pressed={mochiOutfit[slot.id] === option.id}
+                                  onClick={() => updateMochiOutfit(slot.id, option.id)}
+                                >
+                                  <span aria-hidden="true">{option.icon}</span>
+                                  <small>{option.label}</small>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="wardrobe-slot" role="group" aria-label="Chọn màu Mochi">
+                          <h3>Màu Mochi</h3>
+                          <div className="wardrobe-options wardrobe-color-options">
+                            {mochiColors.map((option) => (
+                              <button
+                                className={`wardrobe-option wardrobe-color-option${mochiOutfit.color === option.id ? ' active' : ''}`}
+                                key={option.id}
+                                type="button"
+                                aria-label={`Màu Mochi: ${option.label}`}
+                                aria-pressed={mochiOutfit.color === option.id}
+                                onClick={() => updateMochiColor(option.id)}
+                              >
+                                <span style={{ backgroundColor: option.color }} aria-hidden="true" />
+                                <small>{option.label}</small>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="wardrobe-slot" role="group" aria-label="Chọn biểu cảm Mochi">
+                          <h3>Biểu cảm</h3>
+                          <div className="wardrobe-options wardrobe-expression-options">
+                            {mascotExpressions.map((option) => (
+                              <button
+                                className={`wardrobe-option wardrobe-expression-option${mochiOutfit.expression === option.id ? ' active' : ''}`}
+                                key={option.id}
+                                type="button"
+                                aria-label={`Biểu cảm: ${option.label}`}
+                                aria-pressed={mochiOutfit.expression === option.id}
+                                onClick={() => updateMochiExpression(option.id)}
+                              >
+                                <span aria-hidden="true">{option.icon}</span>
+                                <small>{option.label}</small>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
               {page === 'budgets' && (
                 <div className="page-content">
                   <section className="content-card">
@@ -1413,6 +1676,9 @@ function App() {
                               )}
                               <div className="item-actions">
                                 <button type="button" className="text-button" onClick={() => { setSavingGoalId(goal.id ?? null); setEditingContributionId(null); setSavingAmount(''); setSavingDate(today()); setSavingSourceId(moneySources[0]?.id === undefined ? '' : String(moneySources[0].id)) }}>+ Thêm tiền</button>
+                                <button type="button" className="text-button" onClick={() => createGoalTask(goal)} disabled={goal.id === undefined || goal.taskRewarded || tasks.some((task) => task.goalId === goal.id)}>
+                                  {goal.taskRewarded ? 'Đã nhận thưởng' : tasks.some((task) => task.goalId === goal.id) ? 'Đã tạo nhiệm vụ' : 'Tạo nhiệm vụ từ mục tiêu'}
+                                </button>
                                 <button type="button" className="text-button" onClick={() => editGoal(goal)}>Sửa</button>
                                 {goal.id !== undefined && <button type="button" className="text-button danger-text" onClick={() => deleteGoal(goal.id!)}>Xóa</button>}
                               </div>
@@ -1428,9 +1694,22 @@ function App() {
               {page === 'tasks' && (
                 <div className="page-content">
                   <section className="content-card task-intro">
-                    <div><SectionHeading title="Nhiệm vụ hôm nay" detail="Mỗi nhiệm vụ hoàn thành sẽ tặng bạn điểm Mochi." /><p className="points-total">⭐ {mochiPoints} <span>điểm Mochi</span></p></div>
-                    <button className="primary-button" type="button" onClick={addTask}>+ Tạo nhiệm vụ</button>
+                    <div><SectionHeading title="Nhiệm vụ hôm nay" detail="Mỗi nhiệm vụ hoàn thành sẽ tặng bạn sao Mochi." /></div>
+                    <button className="primary-button" type="button" onClick={() => setIsTaskFormOpen((open) => !open)}>{isTaskFormOpen ? 'Đóng' : '+ Tạo nhiệm vụ'}</button>
                   </section>
+                  {isTaskFormOpen && (
+                    <section className="content-card">
+                      <SectionHeading title="Nhiệm vụ mới" detail="Tự đặt việc nhỏ và phần thưởng sao." />
+                      <form className="form-grid" onSubmit={addTask}>
+                        <label>Tên nhiệm vụ<input required maxLength={100} value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Ví dụ: Đọc sách 20 phút" /></label>
+                        <label>Sao thưởng<input required type="number" min="1" step="1" value={taskReward} onChange={(event) => setTaskReward(event.target.value)} /></label>
+                        <div className="form-actions">
+                          <button className="primary-button" type="submit">Tạo nhiệm vụ</button>
+                          <button className="quiet-button" type="button" onClick={() => setIsTaskFormOpen(false)}>Hủy</button>
+                        </div>
+                      </form>
+                    </section>
+                  )}
                   <section className="dashboard-list-section">
                     <SectionHeading title="Danh sách nhiệm vụ" detail={`${tasks.filter((task) => !task.completed).length} nhiệm vụ cần hoàn thành`} />
                     {tasks.length === 0 ? <EmptyState text="Bạn chưa có nhiệm vụ nào. Tạo nhiệm vụ đầu tiên để bắt đầu nhé!" /> : (
@@ -1438,8 +1717,9 @@ function App() {
                         {tasks.map((task) => (
                           <article className={`content-card task-card${task.completed ? ' task-completed' : ''}`} key={task.id}>
                             <span className="task-check" aria-hidden="true">{task.completed ? '✓' : '○'}</span>
-                            <div className="task-copy"><h3>{task.title}</h3><p>{task.completed ? 'Đã hoàn thành' : `🎁 Hoàn thành để nhận ${task.reward} điểm`}</p></div>
-                            {!task.completed && <button className="secondary-button" type="button" onClick={() => completeTask(task)}>Hoàn thành</button>}
+                            <div className="task-copy"><h3>{task.title}</h3><p>{task.completed ? `Đã hoàn thành${task.completedAt ? ' · tự xóa sau 3 ngày' : ''}` : task.goalId !== undefined ? `Tiến độ mục tiêu: ${Math.round(Math.min(100, ((goals.find((goal) => goal.id === task.goalId)?.savedAmount ?? 0) / Math.max(1, goals.find((goal) => goal.id === task.goalId)?.targetAmount ?? 1)) * 100))}%` : `🎁 Hoàn thành để nhận ${task.reward} sao`}</p></div>
+                            {!task.completed && task.goalId === undefined && <button className="secondary-button" type="button" onClick={() => completeTask(task)}>Hoàn thành</button>}
+                            <button className="text-button danger-text task-delete-button" type="button" onClick={() => deleteTask(task)}>Xóa</button>
                           </article>
                         ))}
                       </div>
@@ -1609,7 +1889,14 @@ function App() {
           ) : null}
         </main>
 
-        <AssistantWidget username={username} isOpen={assistantOpen} onOpenChange={setAssistantOpen} />
+        <button key={pointsPulse} className="task-points-bubble" type="button" onClick={() => setPage('tasks')} aria-label={`${mochiPoints} sao Mochi`} title="Điểm nhiệm vụ">
+          <span className="task-points-star" aria-hidden="true">★</span>
+          <strong>{mochiPoints}</strong>
+          <span className="task-points-unit">sao</span>
+          <span className="task-points-spark" aria-hidden="true">✦</span>
+        </button>
+
+        <AssistantWidget username={username} isOpen={assistantOpen} onOpenChange={setAssistantOpen} appearance={savedMochiOutfit} />
       </div>
     </>
   )
