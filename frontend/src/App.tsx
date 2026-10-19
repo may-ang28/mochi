@@ -23,10 +23,11 @@ type Page = 'home' | 'charts' | 'wardrobe' | 'budgets' | 'goals' | 'tasks' | 'tr
 
 type AccessorySlot = 'clip' | 'hat'
 type MochiOutfit = Record<AccessorySlot, string> & { color: string; expression: MascotExpression }
+type AccessoryOption = { id: string; label: string; icon: string; cost?: number }
 
-const accessorySlots: { id: AccessorySlot; label: string; options: { id: string; label: string; icon: string }[] }[] = [
-  { id: 'clip', label: 'Kẹp tóc', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'bow', label: 'Nơ', icon: '🎀' }, { id: 'flower', label: 'Hoa', icon: '🌼' }, { id: 'star', label: 'Sao', icon: '⭐' }] },
-  { id: 'hat', label: 'Mũ', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'cap', label: 'Mũ', icon: '🧢' }, { id: 'crown', label: 'Vương miện', icon: '👑' }, { id: 'berry', label: 'Mũ dâu', icon: '🍓' }] },
+const accessorySlots: { id: AccessorySlot; label: string; options: AccessoryOption[] }[] = [
+  { id: 'clip', label: 'Kẹp tóc', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'bow', label: 'Nơ', icon: '🎀', cost: 10 }, { id: 'flower', label: 'Hoa', icon: '🌼', cost: 15 }, { id: 'star', label: 'Sao', icon: '⭐', cost: 20 }] },
+  { id: 'hat', label: 'Mũ', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'cap', label: 'Mũ', icon: '🧢', cost: 15 }, { id: 'crown', label: 'Vương miện', icon: '👑', cost: 30 }, { id: 'berry', label: 'Mũ dâu', icon: '🍓', cost: 25 }] },
 ]
 const mochiColors = [
   { id: 'pink', label: 'Hồng mochi', color: '#ff91b8' },
@@ -56,14 +57,7 @@ const readMochiOutfit = (): MochiOutfit => {
 function MochiWordmark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`mochi-wordmark${compact ? ' compact' : ''}`} aria-label="Mochi logo">
-      <span className="mochi-mark" aria-hidden="true">
-        <span className="mochi-face" />
-        <span className="mochi-blush left" />
-        <span className="mochi-blush right" />
-        <span className="mochi-eye left" />
-        <span className="mochi-eye right" />
-      </span>
-      <span className="mochi-word">MOCHI</span>
+      <img className="mochi-logo-svg" src={`${import.meta.env.BASE_URL}mochi-logo.svg`} alt="Mochi" />
     </div>
   )
 }
@@ -187,6 +181,7 @@ function App() {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [moneySources, setMoneySources] = useState<MoneySource[]>([])
   const [mochiPoints, setMochiPoints] = useState(0)
+    const [unlockedAccessories, setUnlockedAccessories] = useState<string[]>([])
   const [pointsPulse, setPointsPulse] = useState(0)
   const [error, setError] = useState('')
   const [isDataLoading, setIsDataLoading] = useState(storedAuth.username !== null)
@@ -243,6 +238,12 @@ function App() {
           ])
 
         if (!active) return
+        const savedUnlocks = savedPoints?.unlockedAccessories ?? []
+        const persistedOutfit = readMochiOutfit()
+        const equippedLegacyAccessories = accessorySlots
+          .map(({ id }) => persistedOutfit[id] === 'none' ? null : `${id}:${persistedOutfit[id]}`)
+          .filter((accessory): accessory is string => accessory !== null)
+        const mergedUnlocks = [...new Set([...savedUnlocks, ...equippedLegacyAccessories])]
         setTransactions(allTransactions)
         setBudgets(allBudgets)
         setGoals(allGoals)
@@ -250,6 +251,15 @@ function App() {
         setTasks(allTasks)
         setMoneySources(allMoneySources)
         setMochiPoints(savedPoints?.total ?? 0)
+        setUnlockedAccessories(mergedUnlocks)
+        if (mergedUnlocks.length !== savedUnlocks.length) {
+          await db.points.put({
+            ...savedPoints,
+            id: 1,
+            total: savedPoints?.total ?? 0,
+            unlockedAccessories: mergedUnlocks,
+          })
+        }
       } catch (loadError) {
         if (active) {
           setError(loadError instanceof Error ? loadError.message : 'Không thể tải dữ liệu.')
@@ -353,6 +363,46 @@ function App() {
 
   const updateMochiOutfit = (slot: AccessorySlot, accessoryId: string) => {
     setMochiOutfit((current) => ({ ...current, [slot]: accessoryId }))
+  }
+
+  const selectAccessory = (slot: AccessorySlot, option: AccessoryOption) => {
+    const accessoryKey = `${slot}:${option.id}`
+    if (!option.cost || unlockedAccessories.includes(accessoryKey)) {
+      updateMochiOutfit(slot, option.id)
+      return
+    }
+
+    void runAction(async () => {
+      let pointsAfterPurchase = mochiPoints
+      let ownedAccessories: string[] = []
+      await db.transaction('rw', db.points, async () => {
+        const pointsRecord = await db.points.get(1)
+        ownedAccessories = pointsRecord?.unlockedAccessories ?? []
+        if (ownedAccessories.includes(accessoryKey)) {
+          pointsAfterPurchase = pointsRecord?.total ?? 0
+          return
+        }
+
+        const availablePoints = pointsRecord?.total ?? 0
+        if (availablePoints < option.cost!) {
+          throw new Error(`Cần ${option.cost} sao để đổi ${option.label}.`)
+        }
+
+        pointsAfterPurchase = availablePoints - option.cost!
+        ownedAccessories = [...ownedAccessories, accessoryKey]
+        await db.points.put({
+          ...pointsRecord,
+          id: 1,
+          total: pointsAfterPurchase,
+          unlockedAccessories: ownedAccessories,
+        })
+      })
+
+      setMochiPoints(pointsAfterPurchase)
+      setUnlockedAccessories(ownedAccessories)
+      setPointsPulse((pulse) => pulse + 1)
+      updateMochiOutfit(slot, option.id)
+    })
   }
 
   const updateMochiColor = (color: string) => {
@@ -674,9 +724,15 @@ function App() {
               await db.tasks.update(task.id!, { completed: true, completedAt })
             }
             await db.goals.update(goalId, { taskRewarded: true })
-            pointsAfterGoalCompletion = (await db.points.get(1))?.total ?? 0
+            const pointsRecord = await db.points.get(1)
+            pointsAfterGoalCompletion = pointsRecord?.total ?? 0
             pointsAfterGoalCompletion += linkedTasks.reduce((reward, task) => reward + task.reward, 0)
-            await db.points.put({ id: 1, total: pointsAfterGoalCompletion })
+            await db.points.put({
+              ...pointsRecord,
+              id: 1,
+              total: pointsAfterGoalCompletion,
+              unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+            })
           }
         }
       })
@@ -754,9 +810,15 @@ function App() {
         const currentTask = await db.tasks.get(task.id!)
         if (!currentTask || currentTask.completed) return
         await db.tasks.update(task.id!, { completed: true, completedAt: new Date().toISOString() })
-        points = (await db.points.get(1))?.total ?? 0
+        const pointsRecord = await db.points.get(1)
+        points = pointsRecord?.total ?? 0
         points += currentTask.reward
-        await db.points.put({ id: 1, total: points })
+        await db.points.put({
+          ...pointsRecord,
+          id: 1,
+          total: points,
+          unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+        })
       })
       if (points !== undefined) {
         setMochiPoints(points)
@@ -796,8 +858,14 @@ function App() {
         })
 
         if (completed) {
-          points = ((await db.points.get(1))?.total ?? 0) + 25
-          await db.points.put({ id: 1, total: points })
+          const pointsRecord = await db.points.get(1)
+          points = (pointsRecord?.total ?? 0) + 25
+          await db.points.put({
+            ...pointsRecord,
+            id: 1,
+            total: points,
+            unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+          })
           await db.goals.update(currentGoal.id!, { taskRewarded: true })
           await db.tasks.update(taskId, { completedAt })
         }
@@ -1479,9 +1547,12 @@ function App() {
                         <p className="dashboard-eyebrow">PHÒNG THAY ĐỒ</p>
                         <h2>Phối đồ cho Mochi</h2>
                       </div>
-                      <button className="primary-button wardrobe-save-button" type="button" onClick={saveMochiOutfit} disabled={!outfitHasChanges}>
-                        {outfitHasChanges ? 'Lưu Mochi' : 'Đã lưu'}
-                      </button>
+                      <div className="wardrobe-header-actions">
+                        <span className="dresser-level">⭐ {mochiPoints} sao</span>
+                        <button className="primary-button wardrobe-save-button" type="button" onClick={saveMochiOutfit} disabled={!outfitHasChanges}>
+                          {outfitHasChanges ? 'Lưu Mochi' : 'Đã lưu'}
+                        </button>
+                      </div>
                     </header>
                     <div className="mochi-dresser-layout">
                       <div className="wardrobe-stage" aria-label="Mochi với màu sắc và phụ kiện đã chọn">
@@ -1507,17 +1578,26 @@ function App() {
                             <h3>{slot.label}</h3>
                             <div className="wardrobe-options">
                               {slot.options.map((option) => (
-                                <button
-                                  className={`wardrobe-option${mochiOutfit[slot.id] === option.id ? ' active' : ''}`}
-                                  key={option.id}
-                                  type="button"
-                                  aria-label={`${slot.label}: ${option.label}`}
-                                  aria-pressed={mochiOutfit[slot.id] === option.id}
-                                  onClick={() => updateMochiOutfit(slot.id, option.id)}
-                                >
-                                  <span aria-hidden="true">{option.icon}</span>
-                                  <small>{option.label}</small>
-                                </button>
+                                (() => {
+                                  const accessoryKey = `${slot.id}:${option.id}`
+                                  const owned = !option.cost || unlockedAccessories.includes(accessoryKey)
+                                  const canAfford = mochiPoints >= (option.cost ?? 0)
+                                  return (
+                                    <button
+                                      className={`wardrobe-option${mochiOutfit[slot.id] === option.id ? ' active' : ''}${owned ? '' : ' locked'}`}
+                                      key={option.id}
+                                      type="button"
+                                      disabled={!owned && !canAfford}
+                                      aria-label={`${slot.label}: ${option.label}${owned ? ', đã sở hữu' : `, giá ${option.cost} sao`}`}
+                                      title={owned ? option.label : `Đổi ${option.label} với ${option.cost} sao`}
+                                      aria-pressed={mochiOutfit[slot.id] === option.id}
+                                      onClick={() => selectAccessory(slot.id, option)}
+                                    >
+                                      <span aria-hidden="true">{option.icon}</span>
+                                      <small>{owned ? option.label : `🔒 ${option.cost} sao`}</small>
+                                    </button>
+                                  )
+                                })()
                               ))}
                             </div>
                           </div>

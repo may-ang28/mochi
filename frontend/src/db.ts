@@ -54,6 +54,12 @@ export interface Task {
   goalId?: number
 }
 
+export interface MochiPointsRecord {
+  id?: number
+  total: number
+  unlockedAccessories?: string[]
+}
+
 export class MochiDB extends Dexie {
   transactions!: Table<Transaction, number>
   budgets!: Table<Budget, number>
@@ -61,7 +67,7 @@ export class MochiDB extends Dexie {
   goalContributions!: Table<GoalContribution, number>
   tasks!: Table<Task, number>
   moneySources!: Table<MoneySource, number>
-  points!: Table<{ id?: number; total: number }, number>
+  points!: Table<MochiPointsRecord, number>
 
   constructor() {
     super('MochiDB')
