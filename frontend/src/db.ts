@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { getSignedInAccountStorageKey } from './auth'
 
 export interface Transaction {
   id?: number
@@ -69,8 +70,8 @@ export class MochiDB extends Dexie {
   moneySources!: Table<MoneySource, number>
   points!: Table<MochiPointsRecord, number>
 
-  constructor() {
-    super('MochiDB')
+  constructor(databaseName = 'MochiDB') {
+    super(databaseName)
 
     this.version(2).stores({
       transactions: '++id, type, category, date',
@@ -139,4 +140,26 @@ export class MochiDB extends Dexie {
   }
 }
 
-export const db = new MochiDB()
+const accountDatabases = new Map<string, MochiDB>()
+
+const getCurrentDatabase = () => {
+  const storageKey = getSignedInAccountStorageKey()
+  if (!storageKey) {
+    throw new Error('Hãy đăng nhập vào tài khoản Mochi trước khi truy cập dữ liệu.')
+  }
+
+  let accountDatabase = accountDatabases.get(storageKey)
+  if (!accountDatabase) {
+    accountDatabase = new MochiDB(storageKey === 'legacy' ? 'MochiDB' : `MochiDB-${encodeURIComponent(storageKey)}`)
+    accountDatabases.set(storageKey, accountDatabase)
+  }
+  return accountDatabase
+}
+
+export const db = new Proxy({} as MochiDB, {
+  get(_target, property) {
+    const currentDatabase = getCurrentDatabase()
+    const value: unknown = Reflect.get(currentDatabase, property, currentDatabase)
+    return typeof value === 'function' ? value.bind(currentDatabase) : value
+  },
+})

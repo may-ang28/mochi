@@ -1,9 +1,10 @@
-const ACCOUNT_STORAGE_KEY = 'mochi-local-account'
+const ACCOUNT_STORAGE_KEY = 'mochi-local-accounts'
 const SESSION_STORAGE_KEY = 'mochi-local-session'
 const PBKDF2_ITERATIONS = 210_000
 
 export type LocalAccount = {
   username: string
+  storageKey: string
   salt: string
   passwordHash: string
 }
@@ -35,42 +36,76 @@ const hashPassword = async (password: string, salt: Uint8Array) => {
   return encodeBase64(new Uint8Array(result))
 }
 
-export const getLocalAccount = (): LocalAccount | null => {
-  const stored = localStorage.getItem(ACCOUNT_STORAGE_KEY)
-  if (!stored) return null
-
-  let account: unknown
-  try {
-    account = JSON.parse(stored)
-  } catch {
-    throw new Error('Không đọc được hồ sơ đã lưu trên thiết bị này.')
-  }
-
+const parseLocalAccount = (value: unknown, legacy = false): LocalAccount => {
   if (
-    typeof account !== 'object' ||
-    account === null ||
-    !('username' in account) ||
-    !('salt' in account) ||
-    !('passwordHash' in account) ||
-    typeof account.username !== 'string' ||
-    typeof account.salt !== 'string' ||
-    typeof account.passwordHash !== 'string'
+    typeof value !== 'object' ||
+    value === null ||
+    !('username' in value) ||
+    !('salt' in value) ||
+    !('passwordHash' in value) ||
+    typeof value.username !== 'string' ||
+    typeof value.salt !== 'string' ||
+    typeof value.passwordHash !== 'string' ||
+    ('storageKey' in value && typeof value.storageKey !== 'string')
   ) {
     throw new Error('Hồ sơ đã lưu không hợp lệ. Hãy xóa dữ liệu Mochi của trang rồi tạo tài khoản mới.')
   }
 
   return {
-    username: account.username,
-    salt: account.salt,
-    passwordHash: account.passwordHash,
+    username: value.username,
+    storageKey: 'storageKey' in value && typeof value.storageKey === 'string'
+      ? value.storageKey
+      : legacy ? 'legacy' : `account-${value.username.trim().toLocaleLowerCase('vi-VN')}`,
+    salt: value.salt,
+    passwordHash: value.passwordHash,
   }
+}
+
+export const getLocalAccounts = (): LocalAccount[] => {
+  const stored = localStorage.getItem(ACCOUNT_STORAGE_KEY)
+  if (!stored) {
+    const legacyStored = localStorage.getItem('mochi-local-account')
+    if (!legacyStored) return []
+    try {
+      return [parseLocalAccount(JSON.parse(legacyStored), true)]
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error('Không đọc được hồ sơ đã lưu trên thiết bị này.', { cause: error })
+      }
+      throw error
+    }
+  }
+
+  let accounts: unknown
+  try {
+    accounts = JSON.parse(stored)
+  } catch {
+    throw new Error('Không đọc được danh sách hồ sơ đã lưu trên thiết bị này.')
+  }
+
+  if (!Array.isArray(accounts)) {
+    throw new Error('Danh sách hồ sơ đã lưu không hợp lệ. Hãy xóa dữ liệu Mochi của trang rồi tạo tài khoản mới.')
+  }
+
+  return accounts.map((account) => parseLocalAccount(account))
 }
 
 export const getSignedInUsername = () => localStorage.getItem(SESSION_STORAGE_KEY)
 
+export const getSignedInAccountStorageKey = () => {
+  const username = getSignedInUsername()
+  if (!username) return null
+  const normalizedUsername = username.trim().toLocaleLowerCase('vi-VN')
+  return getLocalAccounts().find(
+    (account) => account.username.trim().toLocaleLowerCase('vi-VN') === normalizedUsername,
+  )?.storageKey ?? null
+}
+
 export const createLocalAccount = async (username: string, password: string) => {
-  if (getLocalAccount()) {
-    throw new Error('Thiết bị này đã có hồ sơ Mochi. Hãy đăng nhập bằng hồ sơ hiện có.')
+  const accounts = getLocalAccounts()
+  const normalizedUsername = username.trim().toLocaleLowerCase('vi-VN')
+  if (accounts.some((account) => account.username.trim().toLocaleLowerCase('vi-VN') === normalizedUsername)) {
+    throw new Error('Tên tài khoản này đã được tạo trên thiết bị. Hãy đăng nhập hoặc chọn tên khác.')
   }
   if (!crypto.subtle) {
     throw new Error('Trình duyệt cần HTTPS hoặc localhost để tạo hồ sơ an toàn.')
@@ -79,18 +114,23 @@ export const createLocalAccount = async (username: string, password: string) => 
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const account: LocalAccount = {
     username,
+    storageKey: `account-${normalizedUsername}`,
     salt: encodeBase64(salt),
     passwordHash: await hashPassword(password, salt),
   }
 
-  localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account))
+  localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify([...accounts, account]))
+  localStorage.removeItem('mochi-local-account')
   localStorage.setItem(SESSION_STORAGE_KEY, username)
 }
 
-export const signInLocalAccount = async (password: string) => {
-  const account = getLocalAccount()
+export const signInLocalAccount = async (username: string, password: string) => {
+  const normalizedUsername = username.trim().toLocaleLowerCase('vi-VN')
+  const account = getLocalAccounts().find(
+    (savedAccount) => savedAccount.username.trim().toLocaleLowerCase('vi-VN') === normalizedUsername,
+  )
   if (!account) {
-    throw new Error('Chưa có hồ sơ trên thiết bị này. Hãy tạo tài khoản trước.')
+    throw new Error('Tên tài khoản hoặc mật khẩu chưa chính xác.')
   }
   if (!crypto.subtle) {
     throw new Error('Trình duyệt cần HTTPS hoặc localhost để đăng nhập an toàn.')
@@ -98,7 +138,7 @@ export const signInLocalAccount = async (password: string) => {
 
   const passwordHash = await hashPassword(password, decodeBase64(account.salt))
   if (passwordHash !== account.passwordHash) {
-    throw new Error('Mật khẩu chưa chính xác. Hãy thử lại.')
+    throw new Error('Tên tài khoản hoặc mật khẩu chưa chính xác.')
   }
 
   localStorage.setItem(SESSION_STORAGE_KEY, account.username)

@@ -12,7 +12,8 @@ import AssistantWidget from './AssistantWidget'
 import { mascotExpressions, type MascotExpression } from './mascot'
 import {
   createLocalAccount,
-  getLocalAccount,
+  getLocalAccounts,
+  getSignedInAccountStorageKey,
   getSignedInUsername,
   signInLocalAccount,
   signOutLocalAccount,
@@ -39,7 +40,7 @@ const mochiColors = [
 ]
 const readMochiOutfit = (): MochiOutfit => {
   try {
-    const saved = JSON.parse(localStorage.getItem('mochi-outfit') ?? '{}') as Partial<MochiOutfit>
+    const saved = JSON.parse(localStorage.getItem(getAccountPreferenceKey('mochi-outfit')) ?? '{}') as Partial<MochiOutfit>
     const accessories = Object.fromEntries(accessorySlots.map(({ id, options }) => {
       const savedValue = saved[id]
       return [id, options.some((option) => option.id === savedValue) ? savedValue : 'none']
@@ -77,6 +78,10 @@ const today = () => new Date().toISOString().slice(0, 10)
 const currentMonth = () => new Date().toISOString().slice(0, 7)
 const formatMoney = (amount: number) => `${amount.toLocaleString('vi-VN')} MO`
 const BACKGROUND_COLOR_KEY = 'mochi-background-color'
+const getAccountPreferenceKey = (key: string) => {
+  const storageKey = getSignedInAccountStorageKey()
+  return storageKey && storageKey !== 'legacy' ? `${key}:${storageKey}` : key
+}
 const pastelBackgrounds = [
   { label: 'Hồng Mochi', value: '#fce7f3' },
   { label: 'Xanh bạc hà', value: '#e8f5ed' },
@@ -86,7 +91,7 @@ const pastelBackgrounds = [
 ]
 const getInitialBackgroundColor = () => {
   try {
-    const savedColor = localStorage.getItem(BACKGROUND_COLOR_KEY)
+    const savedColor = localStorage.getItem(getAccountPreferenceKey(BACKGROUND_COLOR_KEY))
     return pastelBackgrounds.find((option) => option.value === savedColor)?.value ?? pastelBackgrounds[0].value
   } catch {
     return pastelBackgrounds[0].value
@@ -118,37 +123,37 @@ const getTaskStreak = (entries: Task[]) => {
 function App() {
   const [storedAuth] = useState<{
     username: string | null
-    hasLocalAccount: boolean
     mode: 'signup' | 'signin'
     error: string
   }>(() => {
     try {
-      const account = getLocalAccount()
+      const accounts = getLocalAccounts()
       const signedInUsername = getSignedInUsername()
-      if (account && signedInUsername === account.username) {
-        return { username: account.username, hasLocalAccount: true, mode: 'signin', error: '' }
+      const signedInAccount = accounts.find(
+        (account) => account.username.trim().toLocaleLowerCase('vi-VN') === signedInUsername?.trim().toLocaleLowerCase('vi-VN'),
+      )
+      if (signedInAccount) {
+        return { username: signedInAccount.username, mode: 'signin', error: '' }
       }
       signOutLocalAccount()
       return {
         username: null,
-        hasLocalAccount: account !== null,
-        mode: account ? 'signin' : 'signup',
+        mode: accounts.length > 0 ? 'signin' : 'signup',
         error: '',
       }
     } catch (authLoadError) {
       return {
         username: null,
-        hasLocalAccount: false,
         mode: 'signup',
         error: authLoadError instanceof Error ? authLoadError.message : 'Không thể đọc hồ sơ.',
       }
     }
   })
   const [username, setUsername] = useState<string | null>(storedAuth.username)
-  const [hasLocalAccount, setHasLocalAccount] = useState(storedAuth.hasLocalAccount)
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>(storedAuth.mode)
   const [authName, setAuthName] = useState('')
   const [authPassword, setAuthPassword] = useState('')
+  const [allowPasswordManager, setAllowPasswordManager] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState(storedAuth.error)
   const [page, setPage] = useState<Page>('home')
@@ -288,17 +293,23 @@ function App() {
           throw new Error('Mật khẩu cần có từ 8 đến 128 ký tự.')
         }
         await createLocalAccount(normalizedName, authPassword)
-        setHasLocalAccount(true)
         setIsDataLoading(true)
         setUsername(normalizedName)
       } else {
+        const normalizedName = authName.trim()
+        if (!normalizedName) {
+          throw new Error('Hãy nhập tên tài khoản.')
+        }
         if (authPassword.length > 128) {
           throw new Error('Mật khẩu không được dài quá 128 ký tự.')
         }
-        const signedInUsername = await signInLocalAccount(authPassword)
+        const signedInUsername = await signInLocalAccount(normalizedName, authPassword)
         setIsDataLoading(true)
         setUsername(signedInUsername)
       }
+      setBackgroundColor(getInitialBackgroundColor())
+      setSavedMochiOutfit(readMochiOutfit())
+      setMochiOutfit(readMochiOutfit())
       setAuthPassword('')
     } catch (submitError) {
       setAuthError(submitError instanceof Error ? submitError.message : 'Không thể đăng nhập. Vui lòng thử lại.')
@@ -311,7 +322,10 @@ function App() {
     signOutLocalAccount()
     setUsername(null)
     setPage('home')
+    setAuthMode('signin')
+    setAuthName('')
     setAuthPassword('')
+    setAllowPasswordManager(false)
     setAuthError('')
   }
 
@@ -355,7 +369,7 @@ function App() {
     if (!pastelBackgrounds.some((option) => option.value === color)) return
     setBackgroundColor(color)
     try {
-      localStorage.setItem(BACKGROUND_COLOR_KEY, color)
+      localStorage.setItem(getAccountPreferenceKey(BACKGROUND_COLOR_KEY), color)
     } catch {
       setError('Không thể lưu màu nền trên thiết bị này.')
     }
@@ -419,7 +433,7 @@ function App() {
 
   const saveMochiOutfit = () => {
     try {
-      localStorage.setItem('mochi-outfit', JSON.stringify(mochiOutfit))
+      localStorage.setItem(getAccountPreferenceKey('mochi-outfit'), JSON.stringify(mochiOutfit))
       setSavedMochiOutfit({ ...mochiOutfit })
       setError('')
     } catch {
@@ -1074,7 +1088,7 @@ function App() {
           <p className="auth-description">
             {authMode === 'signup'
               ? 'Tạo hồ sơ để Mochi biết nên gọi bạn là gì.'
-              : hasLocalAccount ? 'Đăng nhập vào hồ sơ Mochi trên thiết bị này.' : 'Đăng nhập vào hồ sơ Mochi của bạn.'}
+              : 'Nhập tên tài khoản và mật khẩu đã lưu trên thiết bị này.'}
           </p>
 
           <div className="auth-tabs" role="tablist" aria-label="Chọn đăng ký hoặc đăng nhập">
@@ -1099,25 +1113,23 @@ function App() {
           </div>
 
           <form className="auth-form" onSubmit={submitAuth}>
-            {authMode === 'signup' && (
-              <label>
-                Tên bạn muốn Mochi gọi
-                <input
-                  autoComplete="nickname"
-                  autoFocus
-                  maxLength={30}
-                  minLength={2}
-                  required
-                  value={authName}
-                  onChange={(event) => setAuthName(event.target.value)}
-                  placeholder="Ví dụ: Linh"
-                />
-              </label>
-            )}
+            <label>
+              {authMode === 'signup' ? 'Tên bạn muốn Mochi gọi' : 'Tên tài khoản'}
+              <input
+                autoComplete={authMode === 'signup' ? 'nickname' : allowPasswordManager ? 'username' : 'off'}
+                autoFocus={authMode === 'signup'}
+                maxLength={30}
+                minLength={2}
+                required
+                value={authName}
+                onChange={(event) => setAuthName(event.target.value)}
+                placeholder="Ví dụ: Linh"
+              />
+            </label>
             <label>
               Mật khẩu
               <input
-                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                autoComplete={authMode === 'signup' ? 'new-password' : allowPasswordManager ? 'current-password' : 'off'}
                 autoFocus={authMode === 'signin'}
                 maxLength={128}
                 minLength={authMode === 'signup' ? 8 : undefined}
@@ -1128,12 +1140,22 @@ function App() {
                 placeholder={authMode === 'signup' ? 'Ít nhất 8 ký tự' : 'Nhập mật khẩu của bạn'}
               />
             </label>
+            {authMode === 'signin' && (
+              <label className="auth-remember-password">
+                <input
+                  type="checkbox"
+                  checked={allowPasswordManager}
+                  onChange={(event) => setAllowPasswordManager(event.target.checked)}
+                />
+                Cho phép trình duyệt đề xuất lưu mật khẩu
+              </label>
+            )}
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button className="auth-submit" type="submit" disabled={authBusy}>
               {authBusy ? 'Đang xử lý...' : authMode === 'signup' ? 'Tạo hồ sơ & vào Mochi' : 'Đăng nhập'}
             </button>
           </form>
-          <p className="auth-local-note">Hồ sơ chỉ lưu trên thiết bị và trình duyệt này.</p>
+          <p className="auth-local-note">Có thể tạo nhiều tài khoản trên thiết bị này. Hồ sơ chỉ lưu trong trình duyệt này.</p>
         </section>
       </main>
     )

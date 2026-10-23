@@ -390,13 +390,13 @@
 
 @media (max-width: 480px) {
   .assistant-widget {
-    right: 16px;
-    bottom: 16px;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .assistant-mascot {
-    right: 16px;
-    bottom: 16px;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .assistant-panel {

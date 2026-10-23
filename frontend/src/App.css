@@ -23,6 +23,7 @@
 body {
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
 }
 
@@ -38,6 +39,7 @@ button {
 
 .mochi-app {
   min-height: 100vh;
+  min-height: 100dvh;
   background: #fce7f3;
 }
 
@@ -1595,12 +1597,14 @@ button {
 @media (max-width: 760px) {
   .dashboard-toggle {
     top: 10px;
-    left: 10px;
+    left: calc(10px + env(safe-area-inset-left));
+    width: 44px;
+    height: 44px;
   }
 
   .dashboard-toggle.is-open {
     top: 10px;
-    right: 12px;
+    right: calc(12px + env(safe-area-inset-right));
     left: auto;
     opacity: 1;
     transform: none;
@@ -1618,7 +1622,7 @@ button {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 7px 14px;
-    padding: 10px 14px;
+    padding: max(10px, env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left));
     border-right: 0;
     border-bottom: 1px solid var(--workspace-line);
   }
@@ -1640,6 +1644,7 @@ button {
     width: 100%;
     gap: 4px;
     overflow-x: auto;
+    scroll-snap-type: x proximity;
     scrollbar-width: none;
   }
 
@@ -1650,11 +1655,12 @@ button {
 
   .sidebar-primary-nav .sidebar-nav-item,
   .sidebar-secondary-nav .sidebar-nav-item {
-    min-height: 35px;
+    min-height: 44px;
     flex: 0 0 auto;
     gap: 7px;
     padding: 0 9px;
     font-size: 11px;
+    scroll-snap-align: start;
   }
 
   .sidebar-primary-nav .sidebar-nav-item > span,
@@ -1676,15 +1682,16 @@ button {
   }
 
   .sidebar-bottom .sidebar-nav-item {
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 9px;
     font-size: 11px;
   }
 
   .workspace-main {
     min-height: calc(100vh - 122px);
+    min-height: calc(100dvh - 122px);
     margin-left: 0;
-    padding: 18px 20px 40px;
+    padding: 18px calc(20px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
   }
 
   .home-dashboard {
@@ -1702,8 +1709,8 @@ button {
 
   .task-points-bubble,
   .dashboard-collapsed .task-points-bubble {
-    bottom: 14px;
-    left: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    left: calc(12px + env(safe-area-inset-left));
   }
 
   .mochi-dresser-layout {
@@ -1736,7 +1743,7 @@ button {
 @media (max-width: 480px) {
   .mochi-sidebar {
     gap: 6px 8px;
-    padding: 9px 10px;
+    padding: max(9px, env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 9px calc(10px + env(safe-area-inset-left));
   }
 
   .mochi-wordmark:not(.compact) .mochi-logo-svg {
@@ -1749,7 +1756,7 @@ button {
   }
 
   .workspace-main {
-    padding: 14px 13px 32px;
+    padding: 14px calc(13px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(13px + env(safe-area-inset-left));
   }
 
   .home-quote {
@@ -2851,8 +2858,9 @@ button:focus-visible {
 .auth-screen {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   background:
     radial-gradient(ellipse at 15% 12%, rgb(255 255 255 / 65%), transparent 38%),
     radial-gradient(ellipse at 90% 84%, rgb(243 197 215 / 55%), transparent 36%),
@@ -2956,6 +2964,22 @@ button:focus-visible {
   color: #765d69;
   font-size: 12px;
   font-weight: 700;
+}
+
+.auth-form .auth-remember-password {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #927987;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.auth-remember-password input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: #c9648c;
 }
 
 .auth-form input {
