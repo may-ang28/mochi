@@ -1992,8 +1992,20 @@ function App() {
               <section className="home-streak" aria-label="Điểm danh hằng ngày" data-tour-target="home-checkin">
                 <span className="streak-mascot"><MochiMascot /></span>
                 <div>
-                  <strong>{checkInStreak} ngày streak</strong>
-                  <span>{checkedInToday ? 'Bạn đã điểm danh hôm nay. Hẹn gặp lại ngày mai!' : 'Điểm danh hôm nay để giữ streak nhé.'}</span>
+                  <p className="dashboard-eyebrow">GÓC NHỎ CỦA BẠN</p>
+                </div>
+              </header>
+
+              <section className="home-quote" aria-label="Trích dẫn hôm nay">
+                <p>“Mỗi ngày một chút, rồi bạn sẽ đi được rất xa.”</p>
+                <span>Một lời nhắc dịu dàng cho hôm nay</span>
+              </section>
+
+              <section className="home-streak" aria-label="Chuỗi ngày hoàn thành nhiệm vụ">
+                <span className="streak-mascot" aria-hidden="true">🍡</span>
+                <div>
+                  <strong>{taskStreak} ngày liên tiếp</strong>
+                  <span>Hãy hoàn thành một nhiệm vụ nhỏ hôm nay</span>
                 </div>
                 <div className="streak-dots" aria-hidden="true">
                   {Array.from({ length: 7 }, (_, index) => <span className={index >= 7 - Math.min(checkInStreak, 7) ? 'complete' : ''} key={index} />)}
