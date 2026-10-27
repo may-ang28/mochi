@@ -1749,8 +1749,11 @@ function App() {
   }
 
   const pageDetails = navigation.find((item) => item.id === page)
-  const checkInStreak = getCheckInStreak(checkInDates, localToday)
   const checkedInToday = checkInDates.includes(localToday)
+  const taskCompletionDates = tasks
+    .filter((task) => task.completed)
+    .map((task) => task.completedAt ? getLocalDateKey(new Date(task.completedAt)) : task.date)
+  const taskStreak = getCheckInStreak(taskCompletionDates, localToday)
   const recentTransactions = transactions
     .filter((transaction) =>
       !transaction.isOpeningBalance &&
@@ -1994,7 +1997,7 @@ function App() {
                 <div>
                   <p className="dashboard-eyebrow">GÓC NHỎ CỦA BẠN</p>
                 </div>
-              </header>
+              </section>
 
               <section className="home-quote" aria-label="Trích dẫn hôm nay">
                 <p>“Mỗi ngày một chút, rồi bạn sẽ đi được rất xa.”</p>
@@ -2008,7 +2011,7 @@ function App() {
                   <span>Hãy hoàn thành một nhiệm vụ nhỏ hôm nay</span>
                 </div>
                 <div className="streak-dots" aria-hidden="true">
-                  {Array.from({ length: 7 }, (_, index) => <span className={index >= 7 - Math.min(checkInStreak, 7) ? 'complete' : ''} key={index} />)}
+                  {Array.from({ length: 7 }, (_, index) => <span className={index >= 7 - Math.min(taskStreak, 7) ? 'complete' : ''} key={index} />)}
                 </div>
                 <button className="check-in-button" type="button" onClick={checkInToday} disabled={checkedInToday}>
                   {checkedInToday ? 'Đã điểm danh' : 'Điểm danh'}

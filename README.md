@@ -12,7 +12,7 @@ Trong Cài đặt, người dùng có thể xuất toàn bộ dữ liệu ứng 
 
 ## Chạy ứng dụng và ChiChat
 
-ChiChat là khung trò chuyện thống kê chạy hoàn toàn trong trình duyệt, không kết nối AI hay gửi dữ liệu tài chính tới dịch vụ bên ngoài. Người dùng chọn một trong ba câu hỏi có sẵn: tổng kết hôm nay, tuần này hoặc tháng này. ChiChat trả lời dựa trên các giao dịch đã lưu, đồng thời nhắc hạn mức ngân sách và mục tiêu sắp tới khi có dữ liệu phù hợp.
+ChiChat trên giao diện hiện tổng kết dữ liệu ngay trong trình duyệt và không tự gửi dữ liệu tài chính ra ngoài. Backend có endpoint AI tùy chọn `POST /api/chat`; khi được gọi, endpoint chuyển nội dung tin nhắn và tên người dùng (nếu có) tới dịch vụ được cấu hình trong `AI_API_URL`. Không gửi thông tin tài chính nhạy cảm trong nội dung chat nếu chưa muốn chia sẻ với dịch vụ đó.
 
 Chạy frontend:
 
@@ -22,6 +22,6 @@ Chạy frontend:
    npm run dev
    ```
 
-Mở địa chỉ Vite hiển thị trong terminal. Backend riêng chỉ cần thiết nếu bạn muốn kiểm tra endpoint health; ChiChat không phụ thuộc backend.
+Mở địa chỉ Vite hiển thị trong terminal. ChiChat hiện không gọi endpoint AI của backend.
 
-Backend dùng `express-rate-limit` để giới hạn 100 yêu cầu mỗi 15 phút cho các endpoint `/api`. CORS chỉ cho phép các origin trong `CORS_ORIGINS`, là danh sách origin cách nhau bằng dấu phẩy. Sao chép `backend/.env.example` thành `backend/.env` và đặt `CORS_ORIGINS` thành địa chỉ frontend cần cho phép trước khi chạy backend. Tài khoản Mochi hiện được xác thực cục bộ; không có endpoint username hay endpoint AI trên backend.
+Backend dùng `express-rate-limit` để giới hạn 100 yêu cầu mỗi 15 phút cho `/api` và 10 yêu cầu mỗi 15 phút cho `/api/chat`. CORS chỉ cấp quyền truy cập trình duyệt cho các origin trong `CORS_ORIGINS`, là danh sách origin cách nhau bằng dấu phẩy. Sao chép `backend/.env.example` thành `backend/.env`, đặt `CORS_ORIGINS` thành domain frontend triển khai và cấu hình `AI_API_KEY` trước khi sử dụng endpoint AI. Tên người dùng gửi đến endpoint được kiểm tra định dạng 2–30 ký tự.
