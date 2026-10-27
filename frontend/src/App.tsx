@@ -5,10 +5,14 @@ import {
   type Goal,
   type GoalContribution,
   type MoneySource,
+  type MoneySourceBalanceMode,
   type Task,
   type Transaction,
+  type TransactionType,
 } from './db'
 import AssistantWidget from './AssistantWidget'
+import OnboardingGuide from './OnboardingGuide'
+import MochiMascot from './MochiMascot'
 import { mascotExpressions, type MascotExpression } from './mascot'
 import {
   createLocalAccount,
@@ -17,10 +21,32 @@ import {
   getSignedInUsername,
   signInLocalAccount,
   signOutLocalAccount,
+  verifyLocalAccountPassword,
 } from './auth'
 import './App.css'
 
 type Page = 'home' | 'charts' | 'wardrobe' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
+type DashboardIconName = Page | 'assistant'
+
+function DashboardIcon({ name }: { name: DashboardIconName }) {
+  return (
+    <svg className={`dashboard-icon dashboard-icon-${name}`} viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false">
+      <circle className="dashboard-icon-backdrop" cx="14" cy="14" r="13" />
+      <g className="dashboard-icon-stroke" strokeLinecap="round" strokeLinejoin="round">
+        {name === 'home' && <><path d="m6.5 13 7.5-6 7.5 6v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" /><path d="M11 22v-6h6v6" /></>}
+        {name === 'charts' && <><path d="M7 21V14h4v7M12 21V8h4v13M17 21v-9h4v9" /><path d="M6 22h16" /></>}
+        {name === 'wardrobe' && <><path d="M14 8a2.5 2.5 0 1 0-2.5-2.5" /><path d="m11.5 6-4.5 4 7 3 7-3-4.5-4" /><path d="m7 10 2 11h10l2-11" /></>}
+        {name === 'budgets' && <><path d="M9 6h10l-.7 3H9.7zM9.7 9h8.6l1.3 11a2 2 0 0 1-2 2h-7.2a2 2 0 0 1-2-2z" /><path d="M11 15h6" /></>}
+        {name === 'goals' && <><circle cx="14" cy="14" r="8" /><circle cx="14" cy="14" r="4" /><path d="m14 14 7-7M17 7h4v4" /></>}
+        {name === 'tasks' && <><rect x="7" y="6" width="14" height="17" rx="2" /><path d="m10 11 1.5 1.5L14 10M16 12h2M10 17l1.5 1.5L14 16M16 18h2" /></>}
+        {name === 'transactions' && <><rect x="6" y="7" width="16" height="14" rx="2.5" /><path d="M6 11h16M10 16h3M17 16h1" /><path d="M10 4v3M18 4v3" /></>}
+        {name === 'sources' && <><path d="M7 10.5h13a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h11" /><path d="M17 14h5v4h-5a2 2 0 0 1 0-4z" /><circle cx="17.5" cy="16" r=".5" /></>}
+        {name === 'settings' && <><circle cx="14" cy="14" r="3.2" /><path d="m11.5 5.7.5-1h4l.5 1 .2 1.4 1.4.8 1.3-.5 2 3.4-1 1-.8 1.4.2 1.5 1 1-2 3.4-1.4-.4-1.6.4-.8 1.2h-4l-.5-1.2-1.4-.8-1.4.4-2-3.4 1-1 .2-1.5-.8-1.4-1-1 2-3.4 1.4.5 1.4-.8z" /></>}
+        {name === 'assistant' && <><path d="M14 5.5 16 11l5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" /><path d="m20 4 .7 2.1L23 7l-2.3.8L20 10l-.8-2.2L17 7l2.2-.9z" /></>}
+      </g>
+    </svg>
+  )
+}
 
 type AccessorySlot = 'clip' | 'hat'
 type MochiOutfit = Record<AccessorySlot, string> & { color: string; expression: MascotExpression }
@@ -63,20 +89,29 @@ function MochiWordmark({ compact = false }: { compact?: boolean }) {
   )
 }
 
-const navigation: { id: Page; label: string; icon: string; description: string }[] = [
-  { id: 'charts', label: 'Biểu đồ', icon: '◒', description: 'Tổng quan dòng tiền' },
-  { id: 'wardrobe', label: 'Tủ đồ', icon: '🧢', description: 'Chọn phụ kiện cho Mochi' },
-  { id: 'budgets', label: 'Ngân sách', icon: '💰', description: 'Theo dõi hạn mức chi tiêu' },
-  { id: 'goals', label: 'Mục tiêu', icon: '🎯', description: 'Lên kế hoạch tiết kiệm' },
-  { id: 'tasks', label: 'Nhiệm vụ', icon: '📝', description: 'Hoàn thành việc nhỏ mỗi ngày' },
-  { id: 'transactions', label: 'Giao dịch', icon: '💳', description: 'Quản lý thu nhập và chi tiêu' },
-  { id: 'sources', label: 'Nguồn tiền', icon: '👛', description: 'Theo dõi số dư từng nguồn tiền' },
-  { id: 'settings', label: 'Cài đặt', icon: '⚙️', description: 'Tài khoản và dữ liệu ứng dụng' },
+const navigation: { id: Page; label: string; icon: DashboardIconName; description: string }[] = [
+  { id: 'charts', label: 'Biểu đồ', icon: 'charts', description: 'Tổng quan thu chi MO' },
+  { id: 'wardrobe', label: 'Tủ đồ', icon: 'wardrobe', description: 'Chọn phụ kiện cho Mochi' },
+  { id: 'budgets', label: 'Ngân sách', icon: 'budgets', description: 'Theo dõi hạn mức chi tiêu' },
+  { id: 'goals', label: 'Mục tiêu', icon: 'goals', description: 'Lên kế hoạch tiết kiệm' },
+  { id: 'tasks', label: 'Nhiệm vụ', icon: 'tasks', description: 'Hoàn thành việc nhỏ mỗi ngày' },
+  { id: 'transactions', label: 'Giao dịch', icon: 'transactions', description: 'Quản lý thu nhập và chi tiêu' },
+  { id: 'sources', label: 'Nguồn MO', icon: 'sources', description: 'Theo dõi số dư từng nguồn MO' },
+  { id: 'settings', label: 'Cài đặt', icon: 'settings', description: 'Tài khoản và dữ liệu ứng dụng' },
 ]
 
-const today = () => new Date().toISOString().slice(0, 10)
-const currentMonth = () => new Date().toISOString().slice(0, 7)
+const today = () => {
+  const date = new Date()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+const currentMonth = () => today().slice(0, 7)
 const formatMoney = (amount: number) => `${amount.toLocaleString('vi-VN')} MO`
+const formatIntegerInput = (value: string) => {
+  const digits = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 16)
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
 const BACKGROUND_COLOR_KEY = 'mochi-background-color'
 const getAccountPreferenceKey = (key: string) => {
   const storageKey = getSignedInAccountStorageKey()
@@ -106,19 +141,79 @@ const defaultMoneySourceTypes = [
   'Thẻ trả trước',
   'Ví điện tử',
 ]
+const MONEY_SOURCE_TYPES_KEY = 'mochi-money-source-types'
+const defaultCategoryOptions = [
+  'Ăn uống',
+  'Di chuyển',
+  'Mua sắm',
+  'Hóa đơn',
+  'Giải trí',
+  'Sức khỏe',
+  'Lương',
+  'Thưởng',
+  'Đầu tư',
+  'Khác',
+]
+const CATEGORY_OPTIONS_KEY = 'mochi-category-options'
 
-const getTaskStreak = (entries: Task[]) => {
-  const completedDates = new Set(entries.filter((task) => task.completed).map((task) => task.date))
-  const currentDate = new Date(`${today()}T00:00:00`)
-  if (!completedDates.has(today())) currentDate.setDate(currentDate.getDate() - 1)
+const readOptionList = (key: string, defaults: string[], existing: string[] = []) => {
+  try {
+    const saved = localStorage.getItem(getAccountPreferenceKey(key))
+    if (saved === null) {
+      return [...new Set([...defaults, ...existing.map((value) => value.trim()).filter(Boolean)])]
+    }
+    const parsed: unknown = JSON.parse(saved)
+    if (!Array.isArray(parsed) || !parsed.every((value) => typeof value === 'string')) {
+      return [...defaults]
+    }
+    return [...new Set(parsed.map((value: string) => value.trim()).filter(Boolean))]
+  } catch {
+    return [...defaults]
+  }
+}
 
+const getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getLocalDateDaysAgo = (days: number) => {
+  const date = new Date()
+  date.setHours(12, 0, 0, 0)
+  date.setDate(date.getDate() - days)
+  return getLocalDateKey(date)
+}
+
+const getCheckInStreak = (dates: string[], currentDate: string) => {
+  const checkedInDates = new Set(dates)
+  const [year, month, day] = currentDate.split('-').map(Number)
+  const date = new Date(year, month - 1, day, 12)
+  if (!checkedInDates.has(currentDate)) date.setDate(date.getDate() - 1)
   let streak = 0
-  while (completedDates.has(currentDate.toISOString().slice(0, 10))) {
+  while (checkedInDates.has(getLocalDateKey(date))) {
     streak += 1
-    currentDate.setDate(currentDate.getDate() - 1)
+    date.setDate(date.getDate() - 1)
   }
   return streak
 }
+
+const transactionTypeLabels: Record<TransactionType, string> = {
+  income: 'Thu nhập',
+  expense: 'Chi tiêu',
+  borrow: 'Vay MO',
+  repay: 'Trả nợ cá nhân',
+  lend: 'Cho mượn',
+  collect: 'Thu hồi MO cho mượn',
+  cardPayment: 'Trả khoản nợ',
+}
+
+const isAssetSource = (source: MoneySource) => source.balanceMode !== 'debt'
+const sourceLabel = (source: MoneySource) => source.name.trim() || source.type
+
+const getTransactionAmountSign = (type: TransactionType) =>
+  ['income', 'borrow', 'collect'].includes(type) ? '+' : '−'
 
 function App() {
   const [storedAuth] = useState<{
@@ -156,14 +251,21 @@ function App() {
   const [allowPasswordManager, setAllowPasswordManager] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState(storedAuth.error)
+  const [resetPassword, setResetPassword] = useState('')
+  const [isResettingData, setIsResettingData] = useState(false)
   const [page, setPage] = useState<Page>('home')
   const [isDashboardOpen, setIsDashboardOpen] = useState(true)
   const [backgroundColor, setBackgroundColor] = useState(getInitialBackgroundColor)
   const [savedMochiOutfit, setSavedMochiOutfit] = useState<MochiOutfit>(readMochiOutfit)
   const [mochiOutfit, setMochiOutfit] = useState<MochiOutfit>(savedMochiOutfit)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [onboardingPending, setOnboardingPending] = useState(false)
+  const [onboardingEnabled, setOnboardingEnabled] = useState(false)
+  const [onboardingCompletedPages, setOnboardingCompletedPages] = useState<Page[]>([])
+  const [activeTourPage, setActiveTourPage] = useState<Page | 'welcome' | null>(null)
   const [isSplashVisible, setIsSplashVisible] = useState(true)
   const [sourceFilter, setSourceFilter] = useState('Tổng')
+  const [showHomeFinancialDetails, setShowHomeFinancialDetails] = useState(false)
   const [activeSourceIndex, setActiveSourceIndex] = useState(0)
   const [activeBudgetIndex, setActiveBudgetIndex] = useState(0)
   const [isBudgetJarActive, setIsBudgetJarActive] = useState(false)
@@ -176,6 +278,8 @@ function App() {
   const [budgetExpenseAmount, setBudgetExpenseAmount] = useState('')
   const [mochiDropId, setMochiDropId] = useState(0)
   const budgetDropHandled = useRef(false)
+  const touchBudgetDrag = useRef<{ budgetId: number | null; category: string; startX: number; startY: number; moved: boolean } | null>(null)
+  const suppressBudgetClick = useRef(false)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
@@ -191,7 +295,9 @@ function App() {
   const [error, setError] = useState('')
   const [isDataLoading, setIsDataLoading] = useState(storedAuth.username !== null)
 
-  const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense')
+  const [transactionType, setTransactionType] = useState<TransactionType>('expense')
+  const [relatedSourceId, setRelatedSourceId] = useState('')
+  const [counterparty, setCounterparty] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
   const [note, setNote] = useState('')
@@ -201,8 +307,20 @@ function App() {
 
   const [sourceName, setSourceName] = useState('')
   const [sourceType, setSourceType] = useState('')
+  const [moneySourceTypes, setMoneySourceTypes] = useState<string[]>(defaultMoneySourceTypes)
+  const [newMoneySourceType, setNewMoneySourceType] = useState('')
+  const [editingMoneySourceType, setEditingMoneySourceType] = useState<string | null>(null)
+  const [moneySourceTypeDraft, setMoneySourceTypeDraft] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(defaultCategoryOptions)
+  const [newCategoryOption, setNewCategoryOption] = useState('')
+  const [editingCategoryOption, setEditingCategoryOption] = useState<string | null>(null)
+  const [categoryOptionDraft, setCategoryOptionDraft] = useState('')
   const [sourceInitialBalance, setSourceInitialBalance] = useState('')
+  const [sourceBalanceMode, setSourceBalanceMode] = useState<MoneySourceBalanceMode>('asset')
+  const [sourceOpeningDate, setSourceOpeningDate] = useState(today())
   const [editingSourceId, setEditingSourceId] = useState<number | null>(null)
+  const [checkInDates, setCheckInDates] = useState<string[]>([])
+  const [localToday, setLocalToday] = useState(getLocalDateKey)
 
   const [budgetCategory, setBudgetCategory] = useState('')
   const [budgetLimit, setBudgetLimit] = useState('')
@@ -255,7 +373,23 @@ function App() {
         setGoalContributions(allGoalContributions)
         setTasks(allTasks)
         setMoneySources(allMoneySources)
+        setMoneySourceTypes(readOptionList(
+          MONEY_SOURCE_TYPES_KEY,
+          defaultMoneySourceTypes,
+          allMoneySources.map((source) => source.type),
+        ))
+        setCategoryOptions(readOptionList(
+          CATEGORY_OPTIONS_KEY,
+          defaultCategoryOptions,
+          allTransactions.filter((transaction) => !transaction.isOpeningBalance).map((transaction) => transaction.category),
+        ))
         setMochiPoints(savedPoints?.total ?? 0)
+        setCheckInDates(savedPoints?.checkInDates ?? [])
+        setOnboardingEnabled(savedPoints?.onboardingEnabled ?? false)
+        setOnboardingCompletedPages(
+          (savedPoints?.onboardingCompletedPages ?? [])
+            .filter((savedPage) => savedPage === 'home' || navigation.some((item) => item.id === savedPage)) as Page[],
+        )
         setUnlockedAccessories(mergedUnlocks)
         if (mergedUnlocks.length !== savedUnlocks.length) {
           await db.points.put({
@@ -278,6 +412,34 @@ function App() {
     return () => { active = false }
   }, [username])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setLocalToday(getLocalDateKey()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!onboardingPending || isDataLoading || isSplashVisible) return
+    const timer = window.setTimeout(() => {
+      setActiveTourPage('welcome')
+      setOnboardingPending(false)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [isDataLoading, isSplashVisible, onboardingPending])
+
+  useEffect(() => {
+    if (
+      !onboardingEnabled ||
+      onboardingPending ||
+      isDataLoading ||
+      isSplashVisible ||
+      onboardingCompletedPages.includes(page)
+    ) return
+    if (page !== 'home' && !onboardingCompletedPages.includes('home')) return
+
+    const timer = window.setTimeout(() => setActiveTourPage(page), 0)
+    return () => window.clearTimeout(timer)
+  }, [isDataLoading, isSplashVisible, onboardingCompletedPages, onboardingEnabled, onboardingPending, page])
+
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setAuthError('')
@@ -293,8 +455,21 @@ function App() {
           throw new Error('Mật khẩu cần có từ 8 đến 128 ký tự.')
         }
         await createLocalAccount(normalizedName, authPassword)
+        const pointsRecord = await db.points.get(1)
+        await db.points.put({
+          ...pointsRecord,
+          id: 1,
+          total: pointsRecord?.total ?? 0,
+          unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+          checkInDates: pointsRecord?.checkInDates ?? [],
+          onboardingEnabled: true,
+          onboardingCompletedPages: [],
+        })
         setIsDataLoading(true)
         setUsername(normalizedName)
+        setOnboardingPending(true)
+        setOnboardingEnabled(true)
+        setOnboardingCompletedPages([])
       } else {
         const normalizedName = authName.trim()
         if (!normalizedName) {
@@ -322,11 +497,51 @@ function App() {
     signOutLocalAccount()
     setUsername(null)
     setPage('home')
+    setOnboardingPending(false)
+    setOnboardingEnabled(false)
+    setOnboardingCompletedPages([])
+    setActiveTourPage(null)
     setAuthMode('signin')
     setAuthName('')
     setAuthPassword('')
     setAllowPasswordManager(false)
     setAuthError('')
+  }
+
+  const resetAccountData = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!username || !resetPassword || isResettingData) return
+
+    setError('')
+    setIsResettingData(true)
+    void (async () => {
+      try {
+        await verifyLocalAccountPassword(username, resetPassword)
+        const confirmed = window.confirm(
+          'Thao tác này sẽ xóa toàn bộ giao dịch, nguồn MO, ngân sách, mục tiêu, nhiệm vụ, tiến trình Mochi và các tùy chỉnh của tài khoản hiện tại. Tài khoản và mật khẩu vẫn được giữ lại. Bạn có chắc chắn muốn tiếp tục?',
+        )
+        if (!confirmed) return
+
+        const accountDataTables = db.tables
+        await db.transaction('rw', accountDataTables, async () => {
+          await Promise.all(accountDataTables.map((table) => table.clear()))
+        })
+        const preferenceKeysToReset = [
+          BACKGROUND_COLOR_KEY,
+          'mochi-outfit',
+          MONEY_SOURCE_TYPES_KEY,
+          CATEGORY_OPTIONS_KEY,
+        ]
+        preferenceKeysToReset.forEach((key) => localStorage.removeItem(getAccountPreferenceKey(key)))
+        setResetPassword('')
+        window.location.reload()
+      } catch (resetError) {
+        setError(resetError instanceof Error ? resetError.message : 'Không thể đặt lại dữ liệu Mochi.')
+      } finally {
+        setResetPassword('')
+        setIsResettingData(false)
+      }
+    })()
   }
 
   const refreshTransactions = async () => setTransactions(await db.transactions.toArray())
@@ -363,6 +578,50 @@ function App() {
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Đã xảy ra lỗi. Vui lòng thử lại.')
     }
+  }
+
+  const completeOnboardingPage = (completedPage: Page) => {
+    setActiveTourPage(null)
+    void runAction(async () => {
+      let completedPages: Page[] = []
+      await db.transaction('rw', db.points, async () => {
+        const pointsRecord = await db.points.get(1)
+        const savedPages = (pointsRecord?.onboardingCompletedPages ?? [])
+          .filter((savedPage): savedPage is Page =>
+            savedPage === 'home' || navigation.some((item) => item.id === savedPage),
+          )
+        completedPages = [...new Set([...savedPages, completedPage])]
+        await db.points.put({
+          ...pointsRecord,
+          id: 1,
+          total: pointsRecord?.total ?? 0,
+          unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+          onboardingEnabled: pointsRecord?.onboardingEnabled ?? true,
+          onboardingCompletedPages: completedPages,
+        })
+      })
+      setOnboardingCompletedPages(completedPages)
+    })
+  }
+
+  const checkInToday = () => {
+    void runAction(async () => {
+      let savedDates: string[] = []
+      await db.transaction('rw', db.points, async () => {
+        const pointsRecord = await db.points.get(1)
+        savedDates = pointsRecord?.checkInDates ?? []
+        if (savedDates.includes(localToday)) return
+        savedDates = [...savedDates, localToday].slice(-400)
+        await db.points.put({
+          ...pointsRecord,
+          id: 1,
+          total: pointsRecord?.total ?? 0,
+          unlockedAccessories: pointsRecord?.unlockedAccessories ?? [],
+          checkInDates: savedDates,
+        })
+      })
+      setCheckInDates(savedDates)
+    })
   }
 
   const updateBackgroundColor = (color: string) => {
@@ -444,23 +703,69 @@ function App() {
   const saveTransaction = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void runAction(async () => {
+      const value = Number(amount)
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error('Số MO cần là số nguyên lớn hơn 0.')
+      }
+      const sourceId = Number(transactionSourceId)
+      const source = moneySources.find((item) => item.id === sourceId)
+      if (!source) throw new Error('Hãy chọn một nguồn MO hợp lệ cho giao dịch.')
+
+      const needsCounterparty = ['borrow', 'repay', 'lend', 'collect'].includes(transactionType)
+      const normalizedCounterparty = counterparty.trim()
+      if (needsCounterparty && !normalizedCounterparty) {
+        throw new Error('Hãy nhập tên người liên quan đến khoản vay hoặc cho mượn.')
+      }
+      if (transactionType === 'cardPayment') {
+        const debtSourceId = Number(relatedSourceId)
+        const debtSource = moneySources.find((item) => item.id === debtSourceId && item.balanceMode === 'debt')
+        if (!isAssetSource(source) || !debtSource) {
+          throw new Error('Hãy chọn nguồn MO thanh toán và khoản nợ hợp lệ.')
+        }
+        const editedPayment = transactions.find((item) =>
+          item.id === editingTransactionId &&
+          item.type === 'cardPayment' &&
+          item.relatedSourceId === debtSourceId,
+        )
+        if (value > sourceBalance(debtSource) + (editedPayment?.amount ?? 0)) {
+          throw new Error('Số MO trả vượt quá khoản nợ hiện tại.')
+        }
+      } else if (transactionType !== 'expense' && !isAssetSource(source)) {
+        throw new Error('Hãy chọn nguồn MO có sẵn cho loại giao dịch này.')
+      }
+
+      const normalizePerson = (name: string) => name.trim().toLocaleLowerCase('vi-VN')
+      if (transactionType === 'repay' || transactionType === 'collect') {
+        const sourceType = transactionType === 'repay' ? 'borrow' : 'lend'
+        const settlementType = transactionType === 'repay' ? 'repay' : 'collect'
+        const outstanding = transactions
+          .filter((item) =>
+            item.counterparty &&
+            normalizePerson(item.counterparty) === normalizePerson(normalizedCounterparty) &&
+            (item.type === sourceType || item.type === settlementType) &&
+            item.id !== editingTransactionId,
+          )
+          .reduce((sum, item) => sum + (item.type === sourceType ? item.amount : -item.amount), 0)
+        if (value > outstanding) {
+          throw new Error(`Số MO vượt quá khoản ${transactionType === 'repay' ? 'nợ' : 'cho mượn'} còn lại.`)
+        }
+      }
+
       const transaction = {
         type: transactionType,
-        amount: Number(amount),
+        amount: value,
         category: category.trim(),
         note: note.trim(),
         date,
-        sourceId: Number(transactionSourceId),
-      }
-
-      if (!transactionSourceId || !moneySources.some((source) => source.id === Number(transactionSourceId))) {
-        throw new Error('Hãy chọn một nguồn tiền hợp lệ cho giao dịch.')
+        sourceId,
+        ...(needsCounterparty ? { counterparty: normalizedCounterparty } : {}),
+        ...(transactionType === 'cardPayment' ? { relatedSourceId: Number(relatedSourceId) } : {}),
       }
 
       if (editingTransactionId === null) {
         await db.transactions.add(transaction)
       } else {
-        await db.transactions.update(editingTransactionId, transaction)
+        await db.transactions.put({ ...transaction, id: editingTransactionId })
       }
       await refreshTransactions()
       setEditingTransactionId(null)
@@ -469,6 +774,8 @@ function App() {
       setNote('')
       setDate(today())
       setTransactionSourceId('')
+      setRelatedSourceId('')
+      setCounterparty('')
     })
   }
 
@@ -477,12 +784,12 @@ function App() {
     if (!budgetExpenseTarget) return
     void runAction(async () => {
       const value = Number(budgetExpenseAmount)
-      if (!Number.isFinite(value) || value <= 0) {
-        throw new Error('Số MO cần lớn hơn 0.')
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error('Số MO cần là số nguyên lớn hơn 0.')
       }
-      const sourceId = activeSource?.id ?? moneySources[0]?.id
+      const sourceId = (activeSource && isAssetSource(activeSource) ? activeSource : moneySources.find(isAssetSource))?.id
       if (sourceId === undefined) {
-        throw new Error('Hãy tạo nguồn tiền trước khi ghi khoản chi này.')
+        throw new Error('Hãy tạo nguồn MO có sẵn trước khi ghi khoản chi này.')
       }
 
       await db.transactions.add({
@@ -497,15 +804,17 @@ function App() {
       setBudgetExpenseTarget(null)
       setBudgetExpenseAmount('')
       setMochiDropId((id) => id + 1)
-      const jarKey = `budget:${budgetExpenseTarget.id ?? budgetExpenseTarget.category}`
+      const jarKey = activeJarKey
       setOpenJarKey(jarKey)
-      window.setTimeout(() => setOpenJarKey((openKey) => openKey === jarKey ? null : openKey), 700)
+      window.setTimeout(() => setOpenJarKey((openKey) => openKey === jarKey ? null : openKey), 900)
     })
   }
 
   const editTransaction = (transaction: Transaction) => {
     setEditingTransactionId(transaction.id ?? null)
     setTransactionType(transaction.type)
+    setRelatedSourceId(transaction.relatedSourceId === undefined ? '' : String(transaction.relatedSourceId))
+    setCounterparty(transaction.counterparty ?? '')
     setAmount(String(transaction.amount))
     setCategory(transaction.category)
     setNote(transaction.note ?? '')
@@ -527,19 +836,26 @@ function App() {
         name: sourceName.trim(),
         type: sourceType.trim(),
         initialBalance: Number(sourceInitialBalance),
+        balanceMode: sourceBalanceMode,
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sourceOpeningDate)) {
+        throw new Error('Hãy chọn ngày bắt đầu hợp lệ.')
+      }
+      if (!Number.isSafeInteger(source.initialBalance)) {
+        throw new Error('Số dư ban đầu cần là số MO nguyên hợp lệ.')
       }
       let createdSourceId: number | undefined
 
       await db.transaction('rw', db.moneySources, db.transactions, async () => {
         if (editingSourceId === null) {
           createdSourceId = await db.moneySources.add(source)
-          if (source.initialBalance > 0) {
+          if (source.initialBalance !== 0) {
             const openingBalanceTransactionId = await db.transactions.add({
-              type: 'income',
-              amount: source.initialBalance,
+              type: source.initialBalance > 0 ? 'income' : 'expense',
+              amount: Math.abs(source.initialBalance),
               category: 'Số dư ban đầu',
-              note: `Số dư ban đầu · ${source.name}`,
-              date: today(),
+              note: `Số dư ban đầu · ${sourceLabel(source)}`,
+              date: sourceOpeningDate,
               sourceId: createdSourceId,
               isOpeningBalance: true,
             })
@@ -547,16 +863,16 @@ function App() {
           }
         } else {
           const existingSource = await db.moneySources.get(editingSourceId)
-          if (!existingSource) throw new Error('Không tìm thấy nguồn tiền.')
+          if (!existingSource) throw new Error('Không tìm thấy nguồn MO.')
 
           let openingBalanceTransactionId = existingSource.openingBalanceTransactionId
-          if (source.initialBalance > 0) {
+          if (source.initialBalance !== 0) {
             const openingBalance = {
-              type: 'income' as const,
-              amount: source.initialBalance,
+              type: source.initialBalance > 0 ? 'income' as const : 'expense' as const,
+              amount: Math.abs(source.initialBalance),
               category: 'Số dư ban đầu',
-              note: `Số dư ban đầu · ${source.name}`,
-              date: today(),
+              note: `Số dư ban đầu · ${sourceLabel(source)}`,
+              date: sourceOpeningDate,
               sourceId: editingSourceId,
               isOpeningBalance: true,
             }
@@ -584,6 +900,8 @@ function App() {
       setSourceName('')
       setSourceType('')
       setSourceInitialBalance('')
+      setSourceBalanceMode('asset')
+      setSourceOpeningDate(today())
     })
   }
 
@@ -592,13 +910,112 @@ function App() {
     setSourceName(source.name)
     setSourceType(source.type)
     setSourceInitialBalance(String(source.initialBalance))
+    setSourceBalanceMode(source.balanceMode ?? 'asset')
+    setSourceOpeningDate(
+      transactions.find((transaction) => transaction.id === source.openingBalanceTransactionId)?.date ?? today(),
+    )
+  }
+
+  const persistMoneySourceTypes = (nextTypes: string[]) => {
+    try {
+      localStorage.setItem(getAccountPreferenceKey(MONEY_SOURCE_TYPES_KEY), JSON.stringify(nextTypes))
+      setMoneySourceTypes(nextTypes)
+      setError('')
+    } catch {
+      setError('Không thể lưu các lựa chọn loại nguồn trên thiết bị này.')
+    }
+  }
+
+  const addMoneySourceType = () => {
+    const newType = newMoneySourceType.trim()
+    if (!newType) return
+    if (moneySourceTypes.some((type) => type.toLocaleLowerCase('vi-VN') === newType.toLocaleLowerCase('vi-VN'))) {
+      setError('Lựa chọn loại nguồn này đã tồn tại.')
+      return
+    }
+    persistMoneySourceTypes([...moneySourceTypes, newType])
+    setSourceType(newType)
+    setNewMoneySourceType('')
+  }
+
+  const saveMoneySourceTypeEdit = () => {
+    const newType = moneySourceTypeDraft.trim()
+    if (editingMoneySourceType === null || !newType) return
+    if (moneySourceTypes.some((type) =>
+      type !== editingMoneySourceType &&
+      type.toLocaleLowerCase('vi-VN') === newType.toLocaleLowerCase('vi-VN'),
+    )) {
+      setError('Lựa chọn loại nguồn này đã tồn tại.')
+      return
+    }
+    persistMoneySourceTypes(moneySourceTypes.map((type) => type === editingMoneySourceType ? newType : type))
+    if (sourceType === editingMoneySourceType) setSourceType(newType)
+    setEditingMoneySourceType(null)
+    setMoneySourceTypeDraft('')
+  }
+
+  const deleteMoneySourceType = (typeToDelete: string) => {
+    persistMoneySourceTypes(moneySourceTypes.filter((type) => type !== typeToDelete))
+    if (sourceType === typeToDelete) setSourceType('')
+    if (editingMoneySourceType === typeToDelete) {
+      setEditingMoneySourceType(null)
+      setMoneySourceTypeDraft('')
+    }
+  }
+
+  const persistCategoryOptions = (nextOptions: string[]) => {
+    try {
+      localStorage.setItem(getAccountPreferenceKey(CATEGORY_OPTIONS_KEY), JSON.stringify(nextOptions))
+      setCategoryOptions(nextOptions)
+      setError('')
+    } catch {
+      setError('Không thể lưu các gợi ý danh mục trên thiết bị này.')
+    }
+  }
+
+  const addCategoryOption = () => {
+    const newOption = newCategoryOption.trim()
+    if (!newOption) return
+    if (categoryOptions.some((option) => option.toLocaleLowerCase('vi-VN') === newOption.toLocaleLowerCase('vi-VN'))) {
+      setError('Gợi ý danh mục này đã tồn tại.')
+      return
+    }
+    persistCategoryOptions([...categoryOptions, newOption])
+    setCategory(newOption)
+    setNewCategoryOption('')
+  }
+
+  const saveCategoryOptionEdit = () => {
+    const newOption = categoryOptionDraft.trim()
+    if (editingCategoryOption === null || !newOption) return
+    if (categoryOptions.some((option) =>
+      option !== editingCategoryOption &&
+      option.toLocaleLowerCase('vi-VN') === newOption.toLocaleLowerCase('vi-VN'),
+    )) {
+      setError('Gợi ý danh mục này đã tồn tại.')
+      return
+    }
+    persistCategoryOptions(categoryOptions.map((option) => option === editingCategoryOption ? newOption : option))
+    if (category === editingCategoryOption) setCategory(newOption)
+    setEditingCategoryOption(null)
+    setCategoryOptionDraft('')
+  }
+
+  const deleteCategoryOption = (optionToDelete: string) => {
+    persistCategoryOptions(categoryOptions.filter((option) => option !== optionToDelete))
+    if (category === optionToDelete) setCategory('')
+    if (editingCategoryOption === optionToDelete) {
+      setEditingCategoryOption(null)
+      setCategoryOptionDraft('')
+    }
   }
 
   const deleteMoneySource = (id: number) => {
     void runAction(async () => {
-      const linkedTransactions = await db.transactions.where('sourceId').equals(id).toArray()
+      const linkedTransactions = (await db.transactions.toArray())
+        .filter((transaction) => transaction.sourceId === id || transaction.relatedSourceId === id)
       if (linkedTransactions.some((transaction) => !transaction.isOpeningBalance)) {
-        throw new Error('Không thể xóa nguồn tiền đã có giao dịch. Hãy giữ lại để bảo toàn lịch sử số dư.')
+        throw new Error('Không thể xóa nguồn MO đã có giao dịch. Hãy giữ lại để bảo toàn lịch sử số dư.')
       }
 
       await db.transaction('rw', db.moneySources, db.transactions, async () => {
@@ -607,13 +1024,18 @@ function App() {
       })
       await Promise.all([refreshMoneySources(), refreshTransactions()])
       if (transactionSourceId === String(id)) setTransactionSourceId('')
+      if (relatedSourceId === String(id)) setRelatedSourceId('')
     })
   }
 
   const saveBudget = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void runAction(async () => {
-      const budget = { category: budgetCategory.trim(), limit: Number(budgetLimit), month: budgetMonth }
+      const limit = Number(budgetLimit)
+      if (!Number.isSafeInteger(limit) || limit <= 0) {
+        throw new Error('Hạn mức ngân sách cần là số MO nguyên lớn hơn 0.')
+      }
+      const budget = { category: budgetCategory.trim(), limit, month: budgetMonth }
       if (editingBudgetId === null) {
         await db.budgets.add(budget)
       } else {
@@ -636,10 +1058,15 @@ function App() {
   const saveGoal = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void runAction(async () => {
+      const targetAmount = Number(goalTargetAmount)
+      const savedAmount = Number(goalSavedAmount) || 0
+      if (!Number.isSafeInteger(targetAmount) || targetAmount <= 0 || !Number.isSafeInteger(savedAmount) || savedAmount < 0) {
+        throw new Error('Số MO mục tiêu và số đã tiết kiệm cần là số nguyên không âm; mục tiêu phải lớn hơn 0.')
+      }
       const goal = {
         name: goalName.trim(),
-        targetAmount: Number(goalTargetAmount),
-        savedAmount: Number(goalSavedAmount) || 0,
+        targetAmount,
+        savedAmount,
         deadline: goalDeadline,
       }
       if (editingGoalId === null) {
@@ -685,10 +1112,10 @@ function App() {
       if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error('Số MO cần là số nguyên lớn hơn 0.')
       }
-      if (!savingDate) throw new Error('Hãy chọn ngày thêm tiền.')
+      if (!savingDate) throw new Error('Hãy chọn ngày thêm MO.')
       const sourceId = Number(savingSourceId)
-      if (!moneySources.some((source) => source.id === sourceId)) {
-        throw new Error('Hãy chọn một nguồn tiền hợp lệ cho khoản tiết kiệm.')
+      if (!moneySources.some((source) => source.id === sourceId && isAssetSource(source))) {
+        throw new Error('Hãy chọn một nguồn MO hợp lệ cho khoản tiết kiệm.')
       }
 
       let pointsAfterGoalCompletion: number | undefined
@@ -713,7 +1140,7 @@ function App() {
         } else {
           const contribution = await db.goalContributions.get(editingContributionId)
           if (!contribution || contribution.goalId !== goalId) {
-            throw new Error('Không tìm thấy lần thêm tiền cần chỉnh sửa.')
+            throw new Error('Không tìm thấy lần thêm MO cần chỉnh sửa.')
           }
 
           let transactionId = contribution.transactionId
@@ -894,21 +1321,72 @@ function App() {
   }
 
   const totalIncome = transactions
-    .filter((transaction) => transaction.type === 'income')
+    .filter((transaction) => transaction.type === 'income' && !transaction.isOpeningBalance)
     .reduce((sum, transaction) => sum + transaction.amount, 0)
   const totalExpense = transactions
-    .filter((transaction) => transaction.type === 'expense')
+    .filter((transaction) => transaction.type === 'expense' && !transaction.isOpeningBalance)
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const balance = totalIncome - totalExpense
-  const sourceBalance = (source: MoneySource) =>
-    source.initialBalance + transactions
-      .filter((transaction) => transaction.sourceId === source.id && !transaction.isOpeningBalance)
-      .reduce((sum, transaction) =>
-        sum + (transaction.type === 'income' ? transaction.amount : -transaction.amount), 0)
+  const outstandingCounterparties = [...transactions.reduce((balances, transaction) => {
+    if (!transaction.counterparty) return balances
+    const key = transaction.counterparty.trim().toLocaleLowerCase('vi-VN')
+    const entry = balances.get(key) ?? { name: transaction.counterparty.trim(), borrowed: 0, lent: 0 }
+    if (transaction.type === 'borrow') entry.borrowed += transaction.amount
+    if (transaction.type === 'repay') entry.borrowed -= transaction.amount
+    if (transaction.type === 'lend') entry.lent += transaction.amount
+    if (transaction.type === 'collect') entry.lent -= transaction.amount
+    balances.set(key, entry)
+    return balances
+  }, new Map<string, { name: string; borrowed: number; lent: number }>()).values()]
+  const sourceBalance = (source: MoneySource) => {
+    const balance = source.initialBalance + transactions.reduce((sum, transaction) => {
+      if (transaction.isOpeningBalance) return sum
+      if (source.balanceMode === 'debt') {
+        if (transaction.relatedSourceId === source.id && transaction.type === 'cardPayment') {
+          return sum - transaction.amount
+        }
+        if (transaction.sourceId !== source.id) return sum
+        if (transaction.type === 'expense') return sum + transaction.amount
+        if (transaction.type === 'income') return sum - transaction.amount
+        return sum
+      }
+      if (transaction.sourceId !== source.id) return sum
+      if (['income', 'borrow', 'collect'].includes(transaction.type)) return sum + transaction.amount
+      if (['expense', 'repay', 'lend', 'cardPayment'].includes(transaction.type)) return sum - transaction.amount
+      return sum
+    }, 0)
+    return source.balanceMode === 'debt' ? Math.max(0, balance) : balance
+  }
+  const isSourceDebt = (source: MoneySource) => source.balanceMode === 'debt' || sourceBalance(source) < 0
+  const sourceDisplayBalance = (source: MoneySource) =>
+    isSourceDebt(source) ? Math.abs(sourceBalance(source)) : sourceBalance(source)
+  const sourceLabelById = (sourceId: number | undefined, fallback: string) => {
+    const source = moneySources.find((item) => item.id === sourceId)
+    return source ? sourceLabel(source) : fallback
+  }
+  const negativeSourceDebtTotal = moneySources
+    .filter(isAssetSource)
+    .reduce((sum, source) => sum + Math.max(0, -sourceBalance(source)), 0)
+  const cardDebtTotal = moneySources
+    .filter((source) => source.balanceMode === 'debt')
+    .reduce((sum, source) => sum + Math.max(0, sourceBalance(source)), 0)
+  const personalDebtTotal = outstandingCounterparties
+    .reduce((sum, person) => sum + Math.max(0, person.borrowed), 0)
+  const totalDebt = cardDebtTotal + negativeSourceDebtTotal + personalDebtTotal
+  const totalLent = outstandingCounterparties
+    .reduce((sum, person) => sum + Math.max(0, person.lent), 0)
+  const netWorth = moneySources.reduce(
+    (sum, source) => sum + (source.balanceMode === 'debt' ? -sourceBalance(source) : sourceBalance(source)),
+    0,
+  )
   const sourceTransactionCount = (sourceId: number) =>
-    transactions.filter((transaction) => transaction.sourceId === sourceId).length
+    transactions.filter((transaction) =>
+      transaction.sourceId === sourceId || transaction.relatedSourceId === sourceId,
+    ).length
   const sourceActivityCount = (sourceId: number) =>
-    transactions.filter((transaction) => transaction.sourceId === sourceId && !transaction.isOpeningBalance).length
+    transactions.filter((transaction) =>
+      (transaction.sourceId === sourceId || transaction.relatedSourceId === sourceId) &&
+      !transaction.isOpeningBalance,
+    ).length
   const isGoalContributionTransaction = (transactionId?: number) =>
     goalContributions.some((contribution) => contribution.transactionId === transactionId)
 
@@ -927,10 +1405,6 @@ function App() {
   const budgetMochiCount = (budget: Budget) => Math.min(12, Math.ceil((budgetUsagePercent(budget) / 100) * 12))
 
   const pageDetails = navigation.find((item) => item.id === page)
-  const moneySourceTypes = [...new Set([
-    ...defaultMoneySourceTypes,
-    ...moneySources.map((source) => source.type.trim()).filter(Boolean),
-  ])]
   const sourceFilters = ['Tổng', ...new Set(moneySources.map((source) => source.type).filter(Boolean))]
   const visibleSources = sourceFilter === 'Tổng'
     ? moneySources
@@ -943,7 +1417,27 @@ function App() {
   const nextSource = visibleSources.length > 1
     ? visibleSources[(safeSourceIndex + 1) % visibleSources.length]
     : undefined
-  const taskStreak = getTaskStreak(tasks)
+  const checkInStreak = getCheckInStreak(checkInDates, localToday)
+  const checkedInToday = checkInDates.includes(localToday)
+  const recentTransactions = transactions
+    .filter((transaction) =>
+      !transaction.isOpeningBalance &&
+      transaction.date >= getLocalDateDaysAgo(3) &&
+      transaction.date < localToday,
+    )
+    .sort((first, second) => second.date.localeCompare(first.date))
+    .slice(0, 5)
+  const sourceSummaryGroups = [...moneySources.reduce((groups, source) => {
+    const mode = source.balanceMode === 'debt' || sourceBalance(source) < 0 ? 'debt' : 'asset'
+    const key = `${source.type.trim() || 'Khác'}:${mode}`
+    const group = groups.get(key) ?? { type: source.type.trim() || 'Khác', mode, sources: [] as MoneySource[] }
+    group.sources.push(source)
+    groups.set(key, group)
+    return groups
+  }, new Map<string, { type: string; mode: MoneySourceBalanceMode; sources: MoneySource[] }>()).values()]
+  const availableTransactionSources = transactionType === 'expense'
+    ? moneySources
+    : moneySources.filter(isAssetSource)
   const budgetPalette = ['#f7d4e3', '#ffe3b3', '#dfeeff', '#dff7e9', '#e9ddff', '#ffd9d9']
   const getBudgetBubbleLabel = (category: string) => {
     const cleaned = category.trim()
@@ -1069,8 +1563,8 @@ function App() {
     return {
       key: monthKey,
       label: date.toLocaleDateString('vi-VN', { month: 'short' }),
-      income: monthTransactions.filter((transaction) => transaction.type === 'income').reduce((sum, transaction) => sum + transaction.amount, 0),
-      expense: monthTransactions.filter((transaction) => transaction.type === 'expense').reduce((sum, transaction) => sum + transaction.amount, 0),
+      income: monthTransactions.filter((transaction) => transaction.type === 'income' && !transaction.isOpeningBalance).reduce((sum, transaction) => sum + transaction.amount, 0),
+      expense: monthTransactions.filter((transaction) => transaction.type === 'expense' && !transaction.isOpeningBalance).reduce((sum, transaction) => sum + transaction.amount, 0),
     }
   })
   const cashflowMax = Math.max(1, ...cashflowMonths.flatMap((month) => [month.income, month.expense]))
@@ -1080,7 +1574,7 @@ function App() {
       <main className="auth-screen">
         <section className="auth-card">
           <div className="auth-brand">
-            <span className="auth-mascot" aria-hidden="true">🍡</span>
+            <span className="auth-mascot"><MochiMascot /></span>
             <span>mochi</span>
           </div>
           <p className="auth-eyebrow">GÓC NHỎ CỦA RIÊNG BẠN</p>
@@ -1166,7 +1660,7 @@ function App() {
       <main className="auth-screen">
         <section className="auth-card">
           <div className="auth-brand">
-            <span className="auth-mascot" aria-hidden="true">🍡</span>
+            <span className="auth-mascot"><MochiMascot /></span>
             <span>mochi</span>
           </div>
           <p className="auth-description">Đang tải lại dữ liệu của bạn...</p>
@@ -1194,22 +1688,22 @@ function App() {
           <span aria-hidden="true">{isDashboardOpen ? '‹' : '☰'}</span>
         </button>
 
-        <aside className="mochi-sidebar" id="mochi-navigation" aria-hidden={!isDashboardOpen}>
+        <aside className="mochi-sidebar" id="mochi-navigation" aria-hidden={!isDashboardOpen} data-tour-target={page === 'home' ? 'home-sidebar' : undefined}>
           <button className="mochi-logo-slot mochi-logo-home" type="button" aria-label="Mochi - về trang chủ" onClick={() => setPage('home')}>
             <MochiWordmark compact />
           </button>
           <nav className="sidebar-primary-nav" aria-label="Điều hướng chính">
             <button className={`sidebar-nav-item${page === 'home' ? ' active' : ''}`} type="button" onClick={() => setPage('home')}>
-              <span aria-hidden="true">⌂</span> Home
+              <span><DashboardIcon name="home" /></span> Home
             </button>
             <button className={`sidebar-nav-item${page === 'charts' ? ' active' : ''}`} type="button" onClick={() => setPage('charts')}>
-              <span aria-hidden="true">◒</span> Charts
+              <span><DashboardIcon name="charts" /></span> Charts
             </button>
             <button className={`sidebar-nav-item${page === 'wardrobe' ? ' active' : ''}`} type="button" onClick={() => setPage('wardrobe')}>
-              <span aria-hidden="true">🧢</span> Tủ đồ
+              <span><DashboardIcon name="wardrobe" /></span> Tủ đồ
             </button>
             <button className="sidebar-nav-item" type="button" onClick={() => setAssistantOpen(true)}>
-              <span aria-hidden="true">✳</span> AI assistant
+              <span><DashboardIcon name="assistant" /></span> AI assistant
             </button>
           </nav>
           <div className="sidebar-divider" />
@@ -1222,13 +1716,13 @@ function App() {
                 type="button"
                 onClick={() => { setPage(item.id); setError('') }}
               >
-                <span aria-hidden="true">{item.icon}</span> {item.label}
+                <span><DashboardIcon name={item.icon} /></span> {item.label}
               </button>
             ))}
           </nav>
           <div className="sidebar-bottom">
             <button className={`sidebar-nav-item${page === 'settings' ? ' active' : ''}`} type="button" onClick={() => setPage('settings')}>
-              <span aria-hidden="true">⚙</span> Cài đặt
+              <span><DashboardIcon name="settings" /></span> Cài đặt
             </button>
             <button className="sidebar-signout" type="button" onClick={signOut}>Đăng xuất</button>
           </div>
@@ -1237,15 +1731,10 @@ function App() {
         <main className={`workspace-main${page === 'home' ? ' workspace-main-home' : ''}`}>
           {page === 'home' ? (
             <div className="home-dashboard">
-              <header className="home-dashboard-header">
+              <section className="home-streak" aria-label="Điểm danh hằng ngày" data-tour-target="home-checkin">
+                <span className="streak-mascot"><MochiMascot /></span>
                 <div>
                   <p className="dashboard-eyebrow">GÓC NHỎ CỦA BẠN</p>
-                </div>
-                <div className="home-header-stickers" aria-hidden="true">
-                  <span className="sticker-bow">🎀</span>
-                  <span className="sticker-heart-button">♥</span>
-                  <span className="sticker-vinyl"><i /></span>
-                  <span className="sticker-envelope"><i /></span>
                 </div>
               </header>
 
@@ -1261,8 +1750,31 @@ function App() {
                   <span>Hãy hoàn thành một nhiệm vụ nhỏ hôm nay</span>
                 </div>
                 <div className="streak-dots" aria-hidden="true">
-                  {Array.from({ length: 7 }, (_, index) => <span className={index >= 7 - Math.min(taskStreak, 7) ? 'complete' : ''} key={index} />)}
+                  {Array.from({ length: 7 }, (_, index) => <span className={index >= 7 - Math.min(checkInStreak, 7) ? 'complete' : ''} key={index} />)}
                 </div>
+                <button className="check-in-button" type="button" onClick={checkInToday} disabled={checkedInToday}>
+                  {checkedInToday ? 'Đã điểm danh' : 'Điểm danh'}
+                </button>
+              </section>
+
+              <section className={`home-summary-grid${showHomeFinancialDetails ? ' expanded' : ''}`} aria-label="Tổng quan tài chính" data-tour-target="home-summary">
+                <SummaryCard label="Tổng thu MO" value={formatMoney(totalIncome)} tone="income" />
+                <SummaryCard label="Tổng chi MO" value={formatMoney(totalExpense)} tone="expense" />
+                <SummaryCard label="Tổng cộng" value={formatMoney(netWorth)} tone="balance" />
+                {showHomeFinancialDetails && (
+                  <>
+                    <SummaryCard label="Nợ MO" value={formatMoney(totalDebt)} tone="debt" />
+                    <SummaryCard label="MO cho mượn" value={formatMoney(totalLent)} tone="lent" />
+                  </>
+                )}
+                <button
+                  className="home-summary-toggle"
+                  type="button"
+                  aria-expanded={showHomeFinancialDetails}
+                  onClick={() => setShowHomeFinancialDetails((shown) => !shown)}
+                >
+                  {showHomeFinancialDetails ? 'Ẩn số liệu mở rộng' : 'Xem thêm số liệu'}
+                </button>
               </section>
 
               <section className="home-money-section">
@@ -1272,11 +1784,11 @@ function App() {
                     <h2>Những chiếc hũ</h2>
                   </div>
                   <button className="home-add-source" type="button" onClick={() => setPage('sources')}>
-                    + Thêm nguồn tiền
+                    + Thêm nguồn MO
                   </button>
                 </header>
 
-                <div className="source-filters" role="group" aria-label="Lọc nguồn tiền">
+                <div className="source-filters" role="group" aria-label="Lọc nguồn MO">
                   {sourceFilters.map((filter) => (
                     <button
                       className={sourceFilter === filter ? 'active' : ''}
@@ -1312,7 +1824,7 @@ function App() {
                     }}
                   >←</button>
 
-                  <div className="budget-bubble-row" aria-label="Các mục ngân sách">
+                  <div className="budget-bubble-row" aria-label="Các mục ngân sách" data-tour-target="home-budget-bubbles">
                     {visibleBudgetBubbles.map((budgetBubble, index) => (
                       <button
                         key={budgetBubble.type === 'create' ? 'create-budget' : budgetBubble.id}
@@ -1321,6 +1833,57 @@ function App() {
                         disabled={Boolean(pendingJar)}
                         className={`budget-bubble${budgetBubble.type === 'create' ? ' create' : ''}${budgetBubble.type === 'overflow' ? ' overflow' : ''}${isBudgetJarActive && index === safeBudgetIndex ? ' active' : ''}`}
                         style={{ background: budgetBubble.tone }}
+                        onTouchStart={(event) => {
+                          if (budgetBubble.type !== 'budget') return
+                          const touch = event.changedTouches[0]
+                          touchBudgetDrag.current = {
+                            budgetId: budgetBubble.budgetId ?? null,
+                            category: budgetBubble.category,
+                            startX: touch.clientX,
+                            startY: touch.clientY,
+                            moved: false,
+                          }
+                          budgetDropHandled.current = false
+                          setDraggedBudgetCategory(budgetBubble.category)
+                          setDraggedBudgetId(budgetBubble.budgetId ?? null)
+                        }}
+                        onTouchMove={(event) => {
+                          const touchDrag = touchBudgetDrag.current
+                          if (!touchDrag) return
+                          const touch = event.changedTouches[0]
+                          if (Math.hypot(touch.clientX - touchDrag.startX, touch.clientY - touchDrag.startY) > 12) {
+                            touchDrag.moved = true
+                            event.preventDefault()
+                          }
+                        }}
+                        onTouchEnd={(event) => {
+                          const touchDrag = touchBudgetDrag.current
+                          touchBudgetDrag.current = null
+                          if (!touchDrag) return
+                          suppressBudgetClick.current = touchDrag.moved
+                          if (touchDrag.moved) {
+                            const touch = event.changedTouches[0]
+                            const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY)
+                            const targetJar = dropTarget?.closest('[data-budget-drop-target]')
+                            const droppedBudget = budgets.find((budget) => budget.id === touchDrag.budgetId)
+                              ?? budgets.find((budget) => budget.category === touchDrag.category)
+                            if (targetJar && droppedBudget && !pendingJar) {
+                              budgetDropHandled.current = true
+                              setBudgetExpenseTarget(droppedBudget)
+                              setBudgetExpenseAmount('')
+                              setOpenJarKey(activeJarKey)
+                            }
+                          }
+                          window.setTimeout(() => { suppressBudgetClick.current = false }, 0)
+                          setDraggedBudgetCategory(null)
+                          setDraggedBudgetId(null)
+                        }}
+                        onTouchCancel={() => {
+                          touchBudgetDrag.current = null
+                          setDraggedBudgetCategory(null)
+                          setDraggedBudgetId(null)
+                          setOpenJarKey(null)
+                        }}
                         onDragStart={(event) => {
                           if (budgetBubble.type !== 'budget') return
                           budgetDropHandled.current = false
@@ -1336,6 +1899,10 @@ function App() {
                           budgetDropHandled.current = false
                         }}
                         onClick={() => {
+                          if (suppressBudgetClick.current) {
+                            suppressBudgetClick.current = false
+                            return
+                          }
                           if (budgetBubble.type === 'create') {
                             setPage('budgets')
                             setEditingBudgetId(null)
@@ -1353,10 +1920,7 @@ function App() {
                           beginJarTransition('budget', index, index > safeBudgetIndex ? 'right' : 'left')
                         }}
                       >
-                        <span className="budget-bubble-jar" aria-hidden="true">
-                          <span className="budget-jar-lid" />
-                          <span className="budget-jar-body" />
-                        </span>
+                        {budgetBubble.type === 'budget' && <MochiMascot className="budget-bubble-mochi" />}
                         <span className="budget-bubble-label">{budgetBubble.label}</span>
                       </button>
                     ))}
@@ -1382,6 +1946,8 @@ function App() {
                   <div
                     key={isBudgetJarActive ? activeBudgetDetail?.id ?? activeBudgetDetail?.category ?? 'budget-jar' : activeSource?.id ?? 'source-jar'}
                     className={`featured-jar${pendingJar ? ` exit-${pendingJar.direction === 'right' ? 'left' : 'right'}` : jarMotionDirection ? ` ${jarMotionDirection}` : ''}${isBudgetJarActive ? ' budget-featured-jar' : ''}${isActiveJarOpen ? ' open' : ''}`}
+                    data-tour-target="home-mochi-jar"
+                    data-budget-drop-target="true"
                     onAnimationEnd={(event) => {
                       if (!pendingJar || !event.animationName.startsWith('budget-jar-exit-')) return
                       setJarMotionDirection(null)
@@ -1422,15 +1988,17 @@ function App() {
                       <span className={`jar-lid${isActiveJarOpen ? ' open' : ''}`} />
                       <span className="jar-glass">
                         {Array.from({ length: isBudgetJarActive && activeBudgetDetail ? budgetMochiCount(activeBudgetDetail) : 6 }, (_, index) => (
-                          <i key={index}>🍡</i>
+                          <MochiMascot className="jar-mochi" key={index} />
                         ))}
+                        {mochiDropId > 0 && (
+                          <MochiMascot key={`falling-${mochiDropId}`} className="falling-mochi" onAnimationEnd={() => setMochiDropId(0)} />
+                        )}
                       </span>
-                      {mochiDropId > 0 && <span key={mochiDropId} className="falling-mochi" onAnimationEnd={() => setMochiDropId(0)}>🍡</span>}
                     </div>
-                    <p className="featured-jar-type">{isBudgetJarActive ? 'NGÂN SÁCH' : activeSource?.type ?? 'NGUỒN TIỀN'}</p>
-                    <h3>{isBudgetJarActive ? activeBudgetDetail?.category : activeSource?.name ?? 'Hũ đầu tiên của bạn'}</h3>
-                    <strong className="featured-jar-balance">{formatMoney(isBudgetJarActive && activeBudgetDetail ? remainingForBudget(activeBudgetDetail) : activeSource ? sourceBalance(activeSource) : 0)}</strong>
-                    {!isBudgetJarActive && !activeSource && <button className="primary-button" type="button" onClick={() => setPage('sources')}>Tạo nguồn tiền</button>}
+                    <p className="featured-jar-type">{isBudgetJarActive ? 'NGÂN SÁCH' : activeSource?.balanceMode === 'debt' ? 'KHOẢN NỢ' : activeSource?.type ?? 'NGUỒN MO'}</p>
+                    <h3>{isBudgetJarActive ? activeBudgetDetail?.category : activeSource ? sourceLabel(activeSource) : 'Hũ đầu tiên của bạn'}</h3>
+                    <strong className="featured-jar-balance">{formatMoney(isBudgetJarActive && activeBudgetDetail ? remainingForBudget(activeBudgetDetail) : activeSource ? sourceDisplayBalance(activeSource) : 0)}</strong>
+                    {!isBudgetJarActive && !activeSource && <button className="primary-button" type="button" onClick={() => setPage('sources')}>Tạo nguồn MO</button>}
                   </div>
 
                   {pendingJar && (
@@ -1442,30 +2010,25 @@ function App() {
                       <div className="mochi-jar-illustration">
                         <span className="jar-lid" />
                         <span className="jar-glass">
-                          <i>🍡</i><i>🍡</i><i>🍡</i><i>🍡</i><i>🍡</i><i>🍡</i>
+                          {Array.from({ length: 6 }, (_, index) => <MochiMascot className="jar-mochi" key={index} />)}
                         </span>
                       </div>
-                      <p className="featured-jar-type">{pendingJar.type === 'budget' ? 'NGÂN SÁCH' : incomingSource?.type ?? 'NGUỒN TIỀN'}</p>
-                      <h3>{pendingJar.type === 'budget' ? incomingBudget?.category : incomingSource?.name ?? 'Hũ đầu tiên của bạn'}</h3>
-                      <strong className="featured-jar-balance">{formatMoney(pendingJar.type === 'budget' ? incomingBudget?.limit ?? 0 : incomingSource ? sourceBalance(incomingSource) : 0)}</strong>
+                      <p className="featured-jar-type">{pendingJar.type === 'budget' ? 'NGÂN SÁCH' : incomingSource?.balanceMode === 'debt' ? 'KHOẢN NỢ' : incomingSource?.type ?? 'NGUỒN MO'}</p>
+                      <h3>{pendingJar.type === 'budget' ? incomingBudget?.category : incomingSource ? sourceLabel(incomingSource) : 'Hũ đầu tiên của bạn'}</h3>
+                      <strong className="featured-jar-balance">{formatMoney(pendingJar.type === 'budget' ? incomingBudget?.limit ?? 0 : incomingSource ? sourceDisplayBalance(incomingSource) : 0)}</strong>
                     </div>
                   )}
 
                   {budgetExpenseTarget && (
                     <form className="budget-expense-chat" onSubmit={saveBudgetExpense} role="dialog" aria-label="Ghi khoản chi ngân sách">
                       <p>Đã dùng bao nhiêu MO cho mục {budgetExpenseTarget.category}?</p>
-                      {moneySources.length === 0 && <p className="budget-expense-chat-notice">Tạo hũ nguồn tiền để lưu giao dịch này.</p>}
+                      {moneySources.filter(isAssetSource).length === 0 && <p className="budget-expense-chat-notice">Tạo nguồn MO có sẵn để lưu giao dịch này.</p>}
                       <label>
                         Số MO đã dùng
-                        <input
-                          autoFocus
-                          required
-                          type="number"
-                          min="1"
-                          step="1"
+                        <MOAmountInput
                           value={budgetExpenseAmount}
-                          onChange={(event) => setBudgetExpenseAmount(event.target.value)}
-                          placeholder="Nhập số MO"
+                          onChange={setBudgetExpenseAmount}
+                          required
                         />
                       </label>
                       <div className="budget-expense-chat-actions">
@@ -1473,7 +2036,7 @@ function App() {
                           setBudgetExpenseTarget(null)
                           setOpenJarKey(null)
                         }}>Hủy</button>
-                        {moneySources.length === 0 ? (
+                        {moneySources.filter(isAssetSource).length === 0 ? (
                           <button className="primary-button" type="button" onClick={() => {
                             setBudgetExpenseTarget(null)
                             setOpenJarKey(null)
@@ -1489,12 +2052,79 @@ function App() {
                   {!isBudgetJarActive && nextSource && <div className="side-jar side-jar-next"><MiniJar source={nextSource} balance={sourceBalance(nextSource)} /></div>}
                 </div>
               </section>
+
+              <section className="home-source-summary" aria-label="Tổng hợp nguồn MO" data-tour-target="home-source-summary">
+                <header className="home-section-heading">
+                  <div>
+                    <p className="dashboard-eyebrow">TÀI KHOẢN CỦA BẠN</p>
+                    <h2>Nguồn MO · {moneySources.length}</h2>
+                  </div>
+                  <button className="home-add-source" type="button" onClick={() => setPage('sources')}>
+                    Quản lý
+                  </button>
+                </header>
+                {sourceSummaryGroups.length === 0 ? (
+                  <p className="home-empty-note">Chưa có nguồn MO. Thêm nguồn tiền mặt, tài khoản hoặc thẻ để bắt đầu.</p>
+                ) : (
+                  <div className="home-source-groups">
+                    {sourceSummaryGroups.map((group) => (
+                      <article className={`home-source-group${group.mode === 'debt' ? ' debt' : ''}`} key={`${group.type}:${group.mode}`}>
+                        <div className="home-source-group-heading">
+                          <div>
+                            <strong>{group.type}</strong>
+                            <span>{group.sources.length} nguồn · {group.mode === 'debt' ? 'khoản nợ' : 'MO có sẵn'}</span>
+                          </div>
+                          <strong>{formatMoney(group.sources.reduce((sum, source) => sum + sourceDisplayBalance(source), 0))}</strong>
+                        </div>
+                        <ul>
+                          {group.sources.map((source) => (
+                            <li key={source.id}>
+                              <span>{sourceLabel(source)}</span>
+                              <span>{formatMoney(sourceDisplayBalance(source))}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="home-recent-transactions" aria-label="Giao dịch gần đây" data-tour-target="home-recent">
+                <header className="home-section-heading">
+                  <div>
+                    <p className="dashboard-eyebrow">NHẬT KÝ</p>
+                    <h2>Giao dịch gần đây</h2>
+                  </div>
+                  <span className="home-recent-caption">3 ngày trước</span>
+                </header>
+                {recentTransactions.length === 0 ? (
+                  <p className="home-empty-note">Chưa có giao dịch trong 3 ngày gần đây.</p>
+                ) : (
+                  <div className="home-recent-list">
+                    {recentTransactions.map((transaction) => (
+                      <div className="home-recent-row" key={transaction.id}>
+                        <span className={`home-recent-icon ${transaction.type}`} aria-hidden="true">
+                          {getTransactionAmountSign(transaction.type)}
+                        </span>
+                        <span className="home-recent-copy">
+                          <strong>{transaction.category}</strong>
+                          <small>{transaction.date} · {transactionTypeLabels[transaction.type]}</small>
+                        </span>
+                        <strong className={`home-recent-amount ${transaction.type}`}>
+                          {getTransactionAmountSign(transaction.type)}{formatMoney(transaction.amount)}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           ) : pageDetails ? (
             <div className="page-shell">
               <header className="page-heading">
                 <div>
-                  <h1><span aria-hidden="true">{pageDetails.icon}</span> {pageDetails.label}</h1>
+                  <h1><span><DashboardIcon name={pageDetails.icon} /></span> {pageDetails.label}</h1>
                   <p className="page-description">{pageDetails.description}</p>
                 </div>
                 <button className="home-link" type="button" onClick={() => setPage('home')}>
@@ -1506,15 +2136,17 @@ function App() {
 
               {page === 'charts' && (
                 <div className="page-content">
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="charts-summary">
                     <SectionHeading title="Tổng quan dòng tiền" detail="Thu nhập và chi tiêu được ghi nhận trên thiết bị này." />
                     <div className="summary-grid">
-                      <SummaryCard label="Tổng thu nhập" value={formatMoney(totalIncome)} tone="income" />
-                      <SummaryCard label="Tổng chi tiêu" value={formatMoney(totalExpense)} tone="expense" />
-                      <SummaryCard label="Số dư" value={formatMoney(balance)} tone="balance" />
+                      <SummaryCard label="Tổng thu MO" value={formatMoney(totalIncome)} tone="income" />
+                      <SummaryCard label="Tổng chi MO" value={formatMoney(totalExpense)} tone="expense" />
+                      <SummaryCard label="Tổng cộng" value={formatMoney(netWorth)} tone="balance" />
+                      <SummaryCard label="Nợ MO" value={formatMoney(totalDebt)} tone="debt" />
+                      <SummaryCard label="MO cho mượn" value={formatMoney(totalLent)} tone="lent" />
                     </div>
                   </section>
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="charts-flow">
                     <SectionHeading title="Thu và chi" detail="Sáu tháng gần nhất" />
                     <div className="cashflow-legend" aria-hidden="true">
                       <span><i className="income" /> Thu nhập</span>
@@ -1551,7 +2183,7 @@ function App() {
                       ))}
                     </div>
                   </section>
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="charts-categories">
                     <SectionHeading title="Chi tiêu theo danh mục" detail={`${expenseCategoryTotals.length} danh mục`} />
                     {expenseCategoryTotals.length === 0 ? <EmptyState text="Chưa có khoản chi nào để hiển thị." /> : (
                       <div className="category-chart-list">
@@ -1569,14 +2201,14 @@ function App() {
 
               {page === 'wardrobe' && (
                 <div className="page-content">
-                  <section className="mochi-dresser" aria-label="Thiết kế phụ kiện cho Mochi">
+                  <section className="mochi-dresser" aria-label="Thiết kế phụ kiện cho Mochi" data-tour-target="wardrobe-stage">
                     <header className="mochi-dresser-heading">
                       <div>
-                        <p className="dashboard-eyebrow">PHÒNG THAY ĐỒ</p>
-                        <h2>Phối đồ cho Mochi</h2>
+                        <p className="dashboard-eyebrow">CỬA HÀNG & TỦ ĐỒ</p>
+                        <h2>Cửa hàng & tủ đồ Mochi</h2>
                       </div>
                       <div className="wardrobe-header-actions">
-                        <span className="dresser-level">⭐ {mochiPoints} sao</span>
+                        <span className="dresser-level" aria-live="polite">⭐ {mochiPoints} sao Mochi</span>
                         <button className="primary-button wardrobe-save-button" type="button" onClick={saveMochiOutfit} disabled={!outfitHasChanges}>
                           {outfitHasChanges ? 'Lưu Mochi' : 'Đã lưu'}
                         </button>
@@ -1600,12 +2232,12 @@ function App() {
                         </div>
                         <span className="wardrobe-stage-caption">Mochi · cấp 1</span>
                       </div>
-                      <div className="wardrobe-tray">
+                      <div className="wardrobe-tray" data-tour-target="wardrobe-options">
                         {accessorySlots.map((slot) => (
                           <div className="wardrobe-slot" key={slot.id} role="group" aria-label={`Chọn ${slot.label}`}>
                             <h3>{slot.label}</h3>
                             <div className="wardrobe-options">
-                              {slot.options.map((option) => (
+                              {slot.options.filter((option) => !option.cost || unlockedAccessories.includes(`${slot.id}:${option.id}`)).map((option) => (
                                 (() => {
                                   const accessoryKey = `${slot.id}:${option.id}`
                                   const owned = !option.cost || unlockedAccessories.includes(accessoryKey)
@@ -1630,6 +2262,38 @@ function App() {
                             </div>
                           </div>
                         ))}
+                        <div className="wardrobe-slot wardrobe-shop-slot" role="group" aria-label="Cửa hàng phụ kiện đổi bằng sao">
+                          <h3>Cửa hàng phụ kiện</h3>
+                          <p className="wardrobe-shop-note">Dùng sao từ nhiệm vụ để mua vật phẩm; vật phẩm đã mua có thể dùng lại bất cứ lúc nào.</p>
+                          {accessorySlots.map((slot) => (
+                            <div className="wardrobe-shop-category" key={slot.id}>
+                              <strong>{slot.label}</strong>
+                              <div className="wardrobe-options">
+                                {slot.options.filter((option) => option.cost).map((option) => {
+                                  const accessoryKey = `${slot.id}:${option.id}`
+                                  const owned = unlockedAccessories.includes(accessoryKey)
+                                  const canAfford = mochiPoints >= (option.cost ?? 0)
+                                  return (
+                                    <button
+                                      className={`wardrobe-option wardrobe-shop-item${owned ? ' owned' : ''}`}
+                                      key={option.id}
+                                      type="button"
+                                      disabled={!owned && !canAfford}
+                                      aria-label={`${owned ? 'Đã mua' : 'Mua'} ${option.label}, giá ${option.cost} sao`}
+                                      onClick={() => selectAccessory(slot.id, option)}
+                                    >
+                                      <span aria-hidden="true">{option.icon}</span>
+                                      <small>{option.label}</small>
+                                      <small>{owned
+                                        ? mochiOutfit[slot.id] === option.id ? 'Đang dùng' : 'Đã mua · Trang bị'
+                                        : `Mua · ${option.cost} sao`}</small>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                         <div className="wardrobe-slot" role="group" aria-label="Chọn màu Mochi">
                           <h3>Màu Mochi</h3>
                           <div className="wardrobe-options wardrobe-color-options">
@@ -1674,19 +2338,25 @@ function App() {
 
               {page === 'budgets' && (
                 <div className="page-content">
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="budgets-form">
                     <SectionHeading title={editingBudgetId === null ? 'Tạo ngân sách' : 'Chỉnh sửa ngân sách'} detail="Đặt giới hạn chi tiêu cho từng danh mục." />
                     <form className="form-grid" onSubmit={saveBudget}>
-                      <label>Danh mục<input required value={budgetCategory} onChange={(event) => setBudgetCategory(event.target.value)} placeholder="Ví dụ: Ăn uống" /></label>
-                      <label>Giới hạn ngân sách (MO)<input required type="number" min="1" value={budgetLimit} onChange={(event) => setBudgetLimit(event.target.value)} placeholder="Nhập số MO" /></label>
-                      <label>Tháng áp dụng<input required type="month" value={budgetMonth} onChange={(event) => setBudgetMonth(event.target.value)} /></label>
+                      <label>Danh mục<input required autoCorrect="on" spellCheck list="category-options" value={budgetCategory} onChange={(event) => setBudgetCategory(event.target.value)} placeholder="Ví dụ: Ăn uống" /></label>
+                      <datalist id="category-options">{categoryOptions.map((option) => <option key={option} value={option} />)}</datalist>
+                      <label>Giới hạn ngân sách (MO)<MOAmountInput value={budgetLimit} onChange={setBudgetLimit} required /></label>
+                      <details className="form-advanced">
+                        <summary>Tùy chọn nâng cao</summary>
+                        <div className="form-advanced-content">
+                          <label>Tháng áp dụng<input required type="month" value={budgetMonth} onChange={(event) => setBudgetMonth(event.target.value)} /></label>
+                        </div>
+                      </details>
                       <div className="form-actions">
                         <button className="primary-button" type="submit">{editingBudgetId === null ? '+ Thêm ngân sách' : 'Lưu thay đổi'}</button>
                         {editingBudgetId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingBudgetId(null); setBudgetCategory(''); setBudgetLimit('') }}>Hủy</button>}
                       </div>
                     </form>
                   </section>
-                  <section className="dashboard-list-section">
+                  <section className="dashboard-list-section" data-tour-target="budgets-list">
                     <SectionHeading title="Ngân sách của bạn" detail={`${budgets.length} ngân sách`} />
                     {budgets.length === 0 ? <EmptyState text="Chưa có ngân sách nào. Hãy tạo ngân sách đầu tiên của bạn." /> : (
                       <div className="card-list">
@@ -1714,20 +2384,25 @@ function App() {
 
               {page === 'goals' && (
                 <div className="page-content">
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="goals-form">
                     <SectionHeading title={editingGoalId === null ? 'Mục tiêu mới' : 'Chỉnh sửa mục tiêu'} detail="Biến kế hoạch tiết kiệm thành từng bước cụ thể." />
                     <form className="form-grid" onSubmit={saveGoal}>
-                      <label>Tên mục tiêu<input required value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="Ví dụ: Mua tai nghe" /></label>
-                      <label>Số MO mục tiêu<input required type="number" min="1" value={goalTargetAmount} onChange={(event) => setGoalTargetAmount(event.target.value)} placeholder="Nhập số MO" /></label>
-                      {editingGoalId === null && <label>Đã tiết kiệm<input type="number" min="0" value={goalSavedAmount} onChange={(event) => setGoalSavedAmount(event.target.value)} placeholder="0 MO" /></label>}
-                      <label>Hạn hoàn thành<input required type="date" value={goalDeadline} onChange={(event) => setGoalDeadline(event.target.value)} /></label>
+                      <label>Tên mục tiêu<input required autoCorrect="on" spellCheck value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="Ví dụ: Mua tai nghe" /></label>
+                      <label>Số MO mục tiêu<MOAmountInput value={goalTargetAmount} onChange={setGoalTargetAmount} required /></label>
+                      {editingGoalId === null && <label>Đã tiết kiệm (MO)<MOAmountInput value={goalSavedAmount} onChange={setGoalSavedAmount} placeholder="0" /></label>}
+                      <details className="form-advanced" open={!goalDeadline}>
+                        <summary>Tùy chọn nâng cao</summary>
+                        <div className="form-advanced-content">
+                          <label>Hạn hoàn thành<input required type="date" value={goalDeadline} onChange={(event) => setGoalDeadline(event.target.value)} /></label>
+                        </div>
+                      </details>
                       <div className="form-actions">
                         <button className="primary-button" type="submit">{editingGoalId === null ? '+ Thêm mục tiêu' : 'Lưu thay đổi'}</button>
                         {editingGoalId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingGoalId(null); setGoalName(''); setGoalTargetAmount(''); setGoalDeadline('') }}>Hủy</button>}
                       </div>
                     </form>
                   </section>
-                  <section className="dashboard-list-section">
+                  <section className="dashboard-list-section" data-tour-target="goals-list">
                     <SectionHeading title="Mục tiêu tiết kiệm" detail={`${goals.length} mục tiêu`} />
                     {goals.length === 0 ? <EmptyState text="Chưa có mục tiêu nào. Bắt đầu với một kế hoạch nhỏ nhé!" /> : (
                       <div className="card-list">
@@ -1744,17 +2419,17 @@ function App() {
                               <details className="goal-contribution-history history-disclosure" open>
                                 <summary className="history-disclosure-summary">
                                   <span className="history-disclosure-copy">
-                                    <strong>Lịch sử thêm tiền</strong>
-                                    <small>{contributions.length} lần thêm tiền</small>
+                                    <strong>Lịch sử thêm MO</strong>
+                                    <small>{contributions.length} lần thêm MO</small>
                                   </span>
                                   <span className="history-chevron" aria-hidden="true">⌄</span>
                                 </summary>
                                 <div className="history-disclosure-content">
-                                  {contributions.length === 0 ? <p>Chưa có lần thêm tiền nào.</p> : contributions.map((contribution) => (
+                                  {contributions.length === 0 ? <p>Chưa có lần thêm MO nào.</p> : contributions.map((contribution) => (
                                     <div className="goal-contribution-row" key={contribution.id}>
                                       <div className="goal-contribution-details">
                                         <strong>{formatMoney(contribution.amount)}</strong>
-                                        <span>{contribution.date} · {moneySources.find((source) => source.id === contribution.sourceId)?.name ?? 'Nguồn tiền không còn tồn tại'}</span>
+                                        <span>{contribution.date} · {moneySources.find((source) => source.id === contribution.sourceId)?.name ?? 'Nguồn MO không còn tồn tại'}</span>
                                       </div>
                                       <div className="item-actions">
                                         <button type="button" className="text-button" onClick={() => editGoalContribution(contribution)}>Sửa</button>
@@ -1766,14 +2441,19 @@ function App() {
                               </details>
                               {savingGoalId === goal.id && (
                                 <form className="saving-form" onSubmit={(event) => { if (goal.id !== undefined) saveGoalContribution(event, goal.id) }}>
-                                  <label className="saving-input-label">Số MO muốn thêm<input required type="number" min="1" value={savingAmount} onChange={(event) => setSavingAmount(event.target.value)} placeholder="Nhập số MO" /></label>
-                                  <label className="saving-input-label">Ngày thêm tiền<input required type="date" value={savingDate} onChange={(event) => setSavingDate(event.target.value)} /></label>
-                                  <label className="saving-input-label">Trừ từ nguồn tiền
+                                  <label className="saving-input-label">Số MO muốn thêm<MOAmountInput value={savingAmount} onChange={setSavingAmount} required /></label>
+                                  <details className="form-advanced">
+                                    <summary>Tùy chọn nâng cao</summary>
+                                    <div className="form-advanced-content">
+                                      <label className="saving-input-label">Ngày thêm MO<input required type="date" value={savingDate} onChange={(event) => setSavingDate(event.target.value)} /></label>
+                                    </div>
+                                  </details>
+                                  <label className="saving-input-label">Trừ từ nguồn MO
                                     <select required value={savingSourceId} onChange={(event) => setSavingSourceId(event.target.value)}>
-                                      <option value="">Chọn nguồn tiền</option>
-                                      {moneySources.map((source) => (
+                                      <option value="">Chọn nguồn MO</option>
+                                      {moneySources.filter(isAssetSource).map((source) => (
                                         <option key={source.id} value={source.id}>
-                                          {source.name} · {formatMoney(sourceBalance(source))}
+                                          {sourceLabel(source)} · {formatMoney(sourceBalance(source))}
                                         </option>
                                       ))}
                                     </select>
@@ -1783,7 +2463,7 @@ function App() {
                                 </form>
                               )}
                               <div className="item-actions">
-                                <button type="button" className="text-button" onClick={() => { setSavingGoalId(goal.id ?? null); setEditingContributionId(null); setSavingAmount(''); setSavingDate(today()); setSavingSourceId(moneySources[0]?.id === undefined ? '' : String(moneySources[0].id)) }}>+ Thêm tiền</button>
+                                <button type="button" className="text-button" onClick={() => { setSavingGoalId(goal.id ?? null); setEditingContributionId(null); setSavingAmount(''); setSavingDate(today()); setSavingSourceId(moneySources.find(isAssetSource)?.id === undefined ? '' : String(moneySources.find(isAssetSource)?.id)) }}>+ Thêm MO</button>
                                 <button type="button" className="text-button" onClick={() => createGoalTask(goal)} disabled={goal.id === undefined || goal.taskRewarded || tasks.some((task) => task.goalId === goal.id)}>
                                   {goal.taskRewarded ? 'Đã nhận thưởng' : tasks.some((task) => task.goalId === goal.id) ? 'Đã tạo nhiệm vụ' : 'Tạo nhiệm vụ từ mục tiêu'}
                                 </button>
@@ -1801,7 +2481,7 @@ function App() {
 
               {page === 'tasks' && (
                 <div className="page-content">
-                  <section className="content-card task-intro">
+                  <section className="content-card task-intro" data-tour-target="tasks-intro">
                     <div><SectionHeading title="Nhiệm vụ hôm nay" detail="Mỗi nhiệm vụ hoàn thành sẽ tặng bạn sao Mochi." /></div>
                     <button className="primary-button" type="button" onClick={() => setIsTaskFormOpen((open) => !open)}>{isTaskFormOpen ? 'Đóng' : '+ Tạo nhiệm vụ'}</button>
                   </section>
@@ -1809,7 +2489,7 @@ function App() {
                     <section className="content-card">
                       <SectionHeading title="Nhiệm vụ mới" detail="Tự đặt việc nhỏ và phần thưởng sao." />
                       <form className="form-grid" onSubmit={addTask}>
-                        <label>Tên nhiệm vụ<input required maxLength={100} value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Ví dụ: Đọc sách 20 phút" /></label>
+                        <label>Tên nhiệm vụ<input required autoCorrect="on" spellCheck maxLength={100} value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Ví dụ: Đọc sách 20 phút" /></label>
                         <label>Sao thưởng<input required type="number" min="1" step="1" value={taskReward} onChange={(event) => setTaskReward(event.target.value)} /></label>
                         <div className="form-actions">
                           <button className="primary-button" type="submit">Tạo nhiệm vụ</button>
@@ -1818,7 +2498,7 @@ function App() {
                       </form>
                     </section>
                   )}
-                  <section className="dashboard-list-section">
+                  <section className="dashboard-list-section" data-tour-target="tasks-list">
                     <SectionHeading title="Danh sách nhiệm vụ" detail={`${tasks.filter((task) => !task.completed).length} nhiệm vụ cần hoàn thành`} />
                     {tasks.length === 0 ? <EmptyState text="Bạn chưa có nhiệm vụ nào. Tạo nhiệm vụ đầu tiên để bắt đầu nhé!" /> : (
                       <div className="card-list">
@@ -1838,43 +2518,98 @@ function App() {
 
               {page === 'sources' && (
                 <div className="page-content">
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="sources-form">
                     <SectionHeading
-                      title={editingSourceId === null ? 'Thêm nguồn tiền' : 'Chỉnh sửa nguồn tiền'}
-                      detail="Tạo các nguồn như tiền mặt, thẻ hoặc tài khoản theo cách bạn muốn."
+                      title={editingSourceId === null ? 'Thêm nguồn MO' : 'Chỉnh sửa nguồn MO'}
+                      detail="Chọn riêng từng nguồn là MO có sẵn hoặc khoản nợ; nguồn có thể trùng loại."
                     />
                     <form className="form-grid" onSubmit={saveMoneySource}>
-                      <label>Tên nguồn tiền<input required maxLength={50} value={sourceName} onChange={(event) => setSourceName(event.target.value)} placeholder="Ví dụ: Ví hằng ngày" /></label>
-                      <label>Loại nguồn tiền
-                        <input required maxLength={30} list="money-source-types" value={sourceType} onChange={(event) => setSourceType(event.target.value)} placeholder="Tiền mặt, thẻ, tài khoản..." />
-                        <datalist id="money-source-types">
-                          {moneySourceTypes.map((type) => <option key={type} value={type} />)}
-                        </datalist>
+                      <label>Tên nguồn MO<input autoCorrect="on" spellCheck maxLength={50} value={sourceName} onChange={(event) => setSourceName(event.target.value)} placeholder="Không bắt buộc" /></label>
+                      <label>Loại nguồn
+                        <select required value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
+                          <option value="">Chọn loại nguồn</option>
+                          {!moneySourceTypes.includes(sourceType) && sourceType && <option value={sourceType}>{sourceType}</option>}
+                          {moneySourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
                       </label>
-                      <label>Số dư MO ban đầu<input required type="number" min="0" step="1" value={sourceInitialBalance} onChange={(event) => setSourceInitialBalance(event.target.value)} placeholder="Nhập số MO hiện có" /></label>
+                      <details className="form-advanced">
+                        <summary>Tùy chọn nâng cao</summary>
+                        <div className="form-advanced-content">
+                          <label>Cách tính nguồn MO
+                            <select value={sourceBalanceMode} onChange={(event) => setSourceBalanceMode(event.target.value as MoneySourceBalanceMode)}>
+                              <option value="asset">MO có sẵn</option>
+                              <option value="debt">Khoản nợ</option>
+                            </select>
+                            <small className="source-accounting-hint">
+                              Nguồn nợ: khoản chi tăng nợ; dùng “Trả khoản nợ” để trừ nợ và nguồn MO thanh toán.
+                            </small>
+                          </label>
+                          <label>Ngày ghi nhận số dư ban đầu<input required type="date" value={sourceOpeningDate} onChange={(event) => setSourceOpeningDate(event.target.value)} /></label>
+                          <div className="source-type-manager">
+                            <strong>Danh sách loại nguồn</strong>
+                            <small>Thêm loại mới, hoặc sửa/xóa các lựa chọn gợi ý.</small>
+                            {moneySourceTypes.map((type) => (
+                              <div className="source-type-option" key={type}>
+                                {editingMoneySourceType === type ? (
+                                  <>
+                                    <input
+                                      aria-label="Tên loại nguồn mới"
+                                      maxLength={30}
+                                      value={moneySourceTypeDraft}
+                                      onChange={(event) => setMoneySourceTypeDraft(event.target.value)}
+                                    />
+                                    <button type="button" className="text-button" onClick={saveMoneySourceTypeEdit}>Lưu</button>
+                                    <button type="button" className="text-button" onClick={() => { setEditingMoneySourceType(null); setMoneySourceTypeDraft('') }}>Hủy</button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>{type}</span>
+                                    <button type="button" className="text-button" onClick={() => { setEditingMoneySourceType(type); setMoneySourceTypeDraft(type) }}>Sửa</button>
+                                    <button type="button" className="text-button danger-text" onClick={() => deleteMoneySourceType(type)}>Xóa</button>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                            <div className="source-type-add">
+                              <input
+                                aria-label="Thêm loại nguồn"
+                                autoCorrect="on"
+                                spellCheck
+                                maxLength={30}
+                                value={newMoneySourceType}
+                                onChange={(event) => setNewMoneySourceType(event.target.value)}
+                                placeholder="Tên loại nguồn mới"
+                              />
+                              <button type="button" className="secondary-button" onClick={addMoneySourceType}>Thêm lựa chọn</button>
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                      <label>{sourceBalanceMode === 'debt' ? 'Số nợ MO ban đầu' : 'Số dư MO ban đầu'}<MOAmountInput value={sourceInitialBalance} onChange={setSourceInitialBalance} placeholder="0" allowNegative={sourceBalanceMode !== 'debt'} required /></label>
+                      {sourceBalanceMode !== 'debt' && <small className="source-accounting-hint">Số dư âm sẽ tự động được tính vào tổng nợ MO.</small>}
                       <div className="form-actions">
-                        <button className="primary-button" type="submit">{editingSourceId === null ? '+ Thêm nguồn tiền' : 'Lưu thay đổi'}</button>
-                        {editingSourceId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingSourceId(null); setSourceName(''); setSourceType(''); setSourceInitialBalance('') }}>Hủy</button>}
+                        <button className="primary-button" type="submit">{editingSourceId === null ? '+ Thêm nguồn MO' : 'Lưu thay đổi'}</button>
+                        {editingSourceId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingSourceId(null); setSourceName(''); setSourceType(''); setSourceInitialBalance(''); setSourceBalanceMode('asset'); setSourceOpeningDate(today()) }}>Hủy</button>}
                       </div>
                     </form>
                   </section>
-                  <section className="dashboard-list-section">
-                    <SectionHeading title="Các nguồn tiền của bạn" detail={`${moneySources.length} nguồn tiền`} />
-                    {moneySources.length === 0 ? <EmptyState text="Chưa có nguồn tiền nào. Hãy thêm tiền mặt, thẻ hoặc tài khoản đầu tiên." /> : (
+                  <section className="dashboard-list-section" data-tour-target="sources-list">
+                    <SectionHeading title="Các nguồn MO của bạn" detail={`${moneySources.length} nguồn`} />
+                    {moneySources.length === 0 ? <EmptyState text="Chưa có nguồn MO nào. Hãy thêm tiền mặt, thẻ hoặc tài khoản đầu tiên." /> : (
                       <div className="card-list">
                         {moneySources.map((source) => {
                           const linkedTransactions = source.id === undefined ? 0 : sourceTransactionCount(source.id)
                           return (
                             <article className="content-card money-source-card" key={source.id}>
                               <div className="item-heading">
-                                <div><h3>{source.name}</h3><p>{source.type}</p></div>
+                                <div><h3>{sourceLabel(source)}</h3><p>{source.type}</p></div>
                                 <span className="status-pill">{linkedTransactions} giao dịch</span>
                               </div>
                               <div className="money-source-balance">
-                                <span>Số dư hiện tại</span>
-                                <strong>{formatMoney(sourceBalance(source))}</strong>
+                                <span>{isSourceDebt(source) ? 'Nợ hiện tại' : 'Số dư hiện tại'}</span>
+                                <strong>{formatMoney(sourceDisplayBalance(source))}</strong>
                               </div>
-                              <p className="money-source-starting">Số dư ban đầu: {formatMoney(source.initialBalance)}</p>
+                              <p className="money-source-starting">{source.balanceMode === 'debt' || source.initialBalance < 0 ? 'Nợ ban đầu' : 'Số dư MO ban đầu'}: {formatMoney(Math.abs(source.initialBalance))} · {isSourceDebt(source) ? 'Khoản nợ' : 'MO có sẵn'}</p>
                               <div className="item-actions">
                                 <button type="button" className="text-button" onClick={() => editMoneySource(source)}>Sửa</button>
                                 {source.id !== undefined && sourceActivityCount(source.id) === 0
@@ -1892,7 +2627,7 @@ function App() {
 
               {page === 'settings' && (
                 <div className="page-content">
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="settings-appearance">
                     <SectionHeading title="Giao diện" detail="Chọn một trong năm màu nền pastel của Mochi." />
                     <div className="background-swatch-grid" role="group" aria-label="Màu nền ứng dụng">
                       {pastelBackgrounds.map((option) => (
@@ -1910,14 +2645,34 @@ function App() {
                       ))}
                     </div>
                   </section>
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="settings-account">
                     <SectionHeading title="Tài khoản" detail="Hồ sơ Mochi đang dùng trên thiết bị này." />
                     <div className="settings-row"><span>Tên tài khoản</span><strong>{username}</strong></div>
                     <button className="secondary-button" type="button" onClick={signOut}>Đăng xuất</button>
                   </section>
-                  <section className="content-card">
+                  <section className="content-card" data-tour-target="settings-data">
                     <SectionHeading title="Dữ liệu" detail="Thông tin nơi lưu dữ liệu Mochi." />
-                    <p className="settings-note">Giao dịch, mục tiêu và nguồn tiền được lưu trong trình duyệt này. Xóa dữ liệu trang web có thể làm mất các thông tin đó.</p>
+                    <p className="settings-note">Giao dịch, mục tiêu và nguồn MO được lưu trong trình duyệt này. Xóa dữ liệu trang web có thể làm mất các thông tin đó.</p>
+                    <div className="settings-reset">
+                      <h3>Đặt lại dữ liệu Mochi</h3>
+                      <p>Giao dịch, nguồn MO, ngân sách, mục tiêu, nhiệm vụ, tiến trình Mochi và các tùy chỉnh sẽ bị xóa. Tài khoản và mật khẩu đăng nhập vẫn được giữ lại.</p>
+                      <form className="settings-reset-form" onSubmit={resetAccountData}>
+                        <label>
+                          Nhập mật khẩu để xác nhận
+                          <input
+                            autoComplete="current-password"
+                            required
+                            type="password"
+                            value={resetPassword}
+                            onChange={(event) => setResetPassword(event.target.value)}
+                            placeholder="Mật khẩu tài khoản hiện tại"
+                          />
+                        </label>
+                        <button className="danger-button" type="submit" disabled={isResettingData || !resetPassword}>
+                          {isResettingData ? 'Đang đặt lại…' : 'Xóa toàn bộ dữ liệu'}
+                        </button>
+                      </form>
+                    </div>
                   </section>
                 </div>
               )}
@@ -1925,42 +2680,131 @@ function App() {
               {page === 'transactions' && (
                 <div className="page-content">
                   <section className="summary-grid" aria-label="Tổng quan giao dịch">
-                    <SummaryCard label="Tổng thu nhập" value={formatMoney(totalIncome)} tone="income" />
-                    <SummaryCard label="Tổng chi tiêu" value={formatMoney(totalExpense)} tone="expense" />
-                    <SummaryCard label="Số dư" value={formatMoney(balance)} tone="balance" />
+                    <SummaryCard label="Tổng thu MO" value={formatMoney(totalIncome)} tone="income" />
+                    <SummaryCard label="Tổng chi MO" value={formatMoney(totalExpense)} tone="expense" />
+                    <SummaryCard label="Tổng cộng" value={formatMoney(netWorth)} tone="balance" />
+                    <SummaryCard label="Nợ MO" value={formatMoney(totalDebt)} tone="debt" />
+                    <SummaryCard label="MO cho mượn" value={formatMoney(totalLent)} tone="lent" />
                   </section>
-                  <section className="content-card">
-                    <SectionHeading title={editingTransactionId === null ? 'Thêm giao dịch' : 'Chỉnh sửa giao dịch'} detail="Ghi lại thu nhập hoặc chi tiêu của bạn." />
+                  <section className="content-card" data-tour-target="transactions-form">
+                    <SectionHeading title={editingTransactionId === null ? 'Thêm giao dịch' : 'Chỉnh sửa giao dịch'} detail="Ghi lại thu, chi, vay, trả nợ, cho mượn hoặc thanh toán thẻ." />
                     {moneySources.length === 0 && (
                       <div className="source-required-note">
-                        <p>Bạn cần tạo ít nhất một nguồn tiền trước khi ghi giao dịch.</p>
-                        <button className="secondary-button" type="button" onClick={() => setPage('sources')}>Tạo nguồn tiền</button>
+                        <p>Bạn cần tạo ít nhất một nguồn MO trước khi ghi giao dịch.</p>
+                        <button className="secondary-button" type="button" onClick={() => setPage('sources')}>Tạo nguồn MO</button>
                       </div>
                     )}
                     <form className="form-grid transaction-form" onSubmit={saveTransaction}>
-                      <label>Loại giao dịch<select value={transactionType} onChange={(event) => setTransactionType(event.target.value as 'income' | 'expense')}><option value="expense">Chi tiêu</option><option value="income">Thu nhập</option></select></label>
-                      <label>Số MO<input required type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="Nhập số MO" /></label>
-                      <label>Danh mục<input required value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Ví dụ: Ăn uống" /></label>
-                      <label>Ngày<input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-                      <label>Nguồn tiền
-                        <select required value={transactionSourceId} onChange={(event) => setTransactionSourceId(event.target.value)} disabled={moneySources.length === 0}>
-                          <option value="">{moneySources.length === 0 ? 'Hãy tạo nguồn tiền trước' : 'Chọn nguồn tiền'}</option>
-                          {moneySources.map((source) => (
+                      <label>Loại giao dịch
+                        <select
+                          value={transactionType}
+                          onChange={(event) => {
+                            setTransactionType(event.target.value as TransactionType)
+                            setTransactionSourceId('')
+                            setRelatedSourceId('')
+                            setCounterparty('')
+                          }}
+                        >
+                          {Object.entries(transactionTypeLabels).map(([type, label]) => (
+                            <option key={type} value={type}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>Số MO<MOAmountInput value={amount} onChange={setAmount} required /></label>
+                      <label>{['borrow', 'repay', 'lend', 'collect'].includes(transactionType) ? 'Nội dung' : 'Danh mục'}<input required autoCorrect="on" spellCheck list="category-options" value={category} onChange={(event) => setCategory(event.target.value)} placeholder={transactionTypeLabels[transactionType]} /></label>
+                      <datalist id="category-options">{categoryOptions.map((option) => <option key={option} value={option} />)}</datalist>
+                      <details className="form-advanced">
+                        <summary>Tùy chọn nâng cao</summary>
+                        <div className="form-advanced-content">
+                          <label>Ngày<input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+                          <label className="full-width">Ghi chú<input autoCorrect="on" spellCheck value={note} onChange={(event) => setNote(event.target.value)} placeholder="Không bắt buộc" /></label>
+                          <div className="category-option-manager">
+                            <strong>Danh sách gợi ý danh mục</strong>
+                            <small>Các gợi ý dùng khi nhập giao dịch hoặc ngân sách; bạn vẫn có thể nhập danh mục khác.</small>
+                            {categoryOptions.map((option) => (
+                              <div className="category-option-row" key={option}>
+                                {editingCategoryOption === option ? (
+                                  <>
+                                    <input
+                                      aria-label="Tên gợi ý danh mục mới"
+                                      autoCorrect="on"
+                                      spellCheck
+                                      maxLength={40}
+                                      value={categoryOptionDraft}
+                                      onChange={(event) => setCategoryOptionDraft(event.target.value)}
+                                    />
+                                    <button type="button" className="text-button" onClick={saveCategoryOptionEdit}>Lưu</button>
+                                    <button type="button" className="text-button" onClick={() => { setEditingCategoryOption(null); setCategoryOptionDraft('') }}>Hủy</button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>{option}</span>
+                                    <button type="button" className="text-button" onClick={() => { setEditingCategoryOption(option); setCategoryOptionDraft(option) }}>Sửa</button>
+                                    <button type="button" className="text-button danger-text" onClick={() => deleteCategoryOption(option)}>Xóa</button>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                            <div className="category-option-add">
+                              <input
+                                aria-label="Thêm gợi ý danh mục"
+                                autoCorrect="on"
+                                spellCheck
+                                maxLength={40}
+                                value={newCategoryOption}
+                                onChange={(event) => setNewCategoryOption(event.target.value)}
+                                placeholder="Tên danh mục mới"
+                              />
+                              <button type="button" className="secondary-button" onClick={addCategoryOption}>Thêm lựa chọn</button>
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                      <label>Nguồn MO
+                        <select required value={transactionSourceId} onChange={(event) => setTransactionSourceId(event.target.value)} disabled={availableTransactionSources.length === 0}>
+                          <option value="">{availableTransactionSources.length === 0 ? 'Hãy tạo nguồn MO trước' : 'Chọn nguồn MO'}</option>
+                          {availableTransactionSources.map((source) => (
                             <option key={source.id} value={source.id}>
-                              {source.name} · {source.type} — {formatMoney(sourceBalance(source))}
+                              {sourceLabel(source)} · {isSourceDebt(source) ? 'Nợ' : 'MO'} — {formatMoney(sourceDisplayBalance(source))}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <label className="full-width">Ghi chú<input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Thêm ghi chú (không bắt buộc)" /></label>
+                      {transactionType === 'cardPayment' && (
+                        <label>Khoản nợ được trả
+                          <select required value={relatedSourceId} onChange={(event) => setRelatedSourceId(event.target.value)}>
+                            <option value="">Chọn thẻ hoặc khoản nợ</option>
+                            {moneySources.filter((source) => source.balanceMode === 'debt').map((source) => (
+                              <option key={source.id} value={source.id}>{sourceLabel(source)} — {formatMoney(sourceDisplayBalance(source))}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {['borrow', 'repay', 'lend', 'collect'].includes(transactionType) && (
+                        <label>
+                          {transactionType === 'borrow' || transactionType === 'repay' ? 'Người cho vay / người nhận trả' : 'Người mượn / người trả lại'}
+                          <input
+                            required
+                            autoCorrect="on"
+                            spellCheck
+                            list={transactionType === 'repay' ? 'borrower-list' : transactionType === 'collect' ? 'lender-list' : undefined}
+                            maxLength={50}
+                            value={counterparty}
+                            onChange={(event) => setCounterparty(event.target.value)}
+                            placeholder="Tên người liên quan"
+                          />
+                          {transactionType === 'repay' && <datalist id="borrower-list">{outstandingCounterparties.filter((person) => person.borrowed > 0).map((person) => <option key={person.name} value={person.name} />)}</datalist>}
+                          {transactionType === 'collect' && <datalist id="lender-list">{outstandingCounterparties.filter((person) => person.lent > 0).map((person) => <option key={person.name} value={person.name} />)}</datalist>}
+                        </label>
+                      )}
                       <div className="form-actions">
-                        <button className="primary-button" type="submit" disabled={moneySources.length === 0}>{editingTransactionId === null ? '+ Thêm giao dịch' : 'Lưu thay đổi'}</button>
-                        {editingTransactionId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingTransactionId(null); setAmount(''); setCategory(''); setNote(''); setDate(today()); setTransactionSourceId('') }}>Hủy</button>}
+                        <button className="primary-button" type="submit" disabled={availableTransactionSources.length === 0}>{editingTransactionId === null ? '+ Thêm giao dịch' : 'Lưu thay đổi'}</button>
+                        {editingTransactionId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingTransactionId(null); setAmount(''); setCategory(''); setNote(''); setDate(today()); setTransactionSourceId(''); setRelatedSourceId(''); setCounterparty('') }}>Hủy</button>}
                       </div>
                     </form>
                   </section>
                   <section className="dashboard-list-section">
-                    <details className="history-disclosure transaction-history" open>
+                    <details className="history-disclosure transaction-history" open data-tour-target="transactions-history">
                       <summary className="history-disclosure-summary">
                         <span className="history-disclosure-copy">
                           <strong>Lịch sử giao dịch</strong>
@@ -1973,11 +2817,11 @@ function App() {
                           <div className="content-card transaction-list">
                             {transactions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((transaction) => (
                               <article className="transaction-row" key={transaction.id}>
-                                <span className={`transaction-icon ${transaction.type}`}>{transaction.type === 'income' ? '↙' : '↗'}</span>
-                                <div className="transaction-copy"><h3>{transaction.category}</h3><p>{transaction.note || (transaction.type === 'income' ? 'Thu nhập' : 'Chi tiêu')} · {transaction.date} · {moneySources.find((source) => source.id === transaction.sourceId)?.name ?? 'Chưa chọn nguồn tiền'}</p></div>
-                                <strong className={`transaction-amount ${transaction.type}`}>{transaction.type === 'income' ? '+' : '−'}{formatMoney(transaction.amount)}</strong>
+                                <span className={`transaction-icon ${transaction.type}`}>{getTransactionAmountSign(transaction.type)}</span>
+                                <div className="transaction-copy"><h3>{transaction.category}</h3><p>{transactionTypeLabels[transaction.type]}{transaction.counterparty ? ` · ${transaction.counterparty}` : ''} · {transaction.date} · {sourceLabelById(transaction.sourceId, 'Chưa chọn nguồn MO')}{transaction.relatedSourceId ? ` → ${sourceLabelById(transaction.relatedSourceId, 'Khoản nợ')}` : ''}</p></div>
+                                <strong className={`transaction-amount ${transaction.type}`}>{getTransactionAmountSign(transaction.type)}{formatMoney(transaction.amount)}</strong>
                                 {transaction.isOpeningBalance || isGoalContributionTransaction(transaction.id) ? (
-                                  <span className="source-delete-note">{transaction.isOpeningBalance ? 'Điều chỉnh tại nguồn tiền' : 'Điều chỉnh tại mục tiêu'}</span>
+                                  <span className="source-delete-note">{transaction.isOpeningBalance ? 'Điều chỉnh tại nguồn MO' : 'Điều chỉnh tại mục tiêu'}</span>
                                 ) : (
                                   <div className="item-actions">
                                     <button className="text-button" type="button" onClick={() => editTransaction(transaction)}>Sửa</button>
@@ -2005,6 +2849,17 @@ function App() {
         </button>
 
         <AssistantWidget username={username} isOpen={assistantOpen} onOpenChange={setAssistantOpen} appearance={savedMochiOutfit} />
+        {activeTourPage && !isDataLoading && !isSplashVisible && (
+          <OnboardingGuide
+            page={activeTourPage}
+            onClose={() => activeTourPage === 'welcome'
+              ? setActiveTourPage('home')
+              : completeOnboardingPage(activeTourPage)}
+            onFinish={() => activeTourPage === 'welcome'
+              ? setActiveTourPage('home')
+              : completeOnboardingPage(activeTourPage)}
+          />
+        )}
       </div>
     </>
   )
@@ -2018,16 +2873,70 @@ function EmptyState({ text }: { text: string }) {
   return <div className="empty-state"><span aria-hidden="true">🌷</span><p>{text}</p></div>
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone: 'income' | 'expense' | 'balance' }) {
+function SummaryCard({ label, value, tone }: { label: string; value: string; tone: 'income' | 'expense' | 'balance' | 'debt' | 'lent' }) {
   return <article className={`summary-card ${tone}`}><p>{label}</p><strong>{value}</strong></article>
+}
+
+function MOAmountInput({
+  value,
+  onChange,
+  placeholder = 'Nhập số MO',
+  required = false,
+  allowNegative = false,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  required?: boolean
+  allowNegative?: boolean
+}) {
+  const isNegative = allowNegative && value.startsWith('-')
+  const digits = value.replace(/\D/g, '')
+  const numericValue = Number(digits)
+  const suggestedValues = !isNegative && digits && numericValue > 0 && numericValue < 1000
+    ? [`${digits}000`, `${digits}000000`]
+    : []
+
+  return (
+    <span className="mo-amount-control">
+      <input
+        type="text"
+        inputMode={allowNegative ? 'decimal' : 'numeric'}
+        pattern={allowNegative ? '-?[0-9.]*' : '[0-9.]*'}
+        autoComplete="off"
+        maxLength={22}
+        required={required}
+        value={`${isNegative ? '-' : ''}${formatIntegerInput(value)}`}
+        onChange={(event) => {
+          const nextValue = event.target.value
+          const negative = allowNegative && nextValue.trimStart().startsWith('-')
+          const nextDigits = nextValue.replace(/\D/g, '').slice(0, 16)
+          onChange(`${negative ? '-' : ''}${nextDigits}`)
+        }}
+        placeholder={placeholder}
+      />
+      <small className="mo-amount-unit">MO</small>
+      {suggestedValues.map((suggestedValue) => (
+        <button
+          key={suggestedValue}
+          className="mo-amount-suggestion"
+          type="button"
+          aria-label={`Dùng đề xuất ${formatIntegerInput(suggestedValue)} MO`}
+          onClick={() => onChange(suggestedValue)}
+        >
+          {formatIntegerInput(suggestedValue)} MO · +{suggestedValue.endsWith('000000') ? '000000' : '000'}
+        </button>
+      ))}
+    </span>
+  )
 }
 
 function MiniJar({ source, balance }: { source: MoneySource; balance: number }) {
   return (
     <div className="mini-jar">
-      <span className="mini-jar-glass" aria-hidden="true">🍡</span>
-      <strong>{source.name}</strong>
-      <small>{formatMoney(balance)}</small>
+      <span className="mini-jar-glass" aria-hidden="true"><MochiMascot /></span>
+      <strong>{sourceLabel(source)}</strong>
+      <small>{source.balanceMode === 'debt' || balance < 0 ? 'Nợ' : 'Số dư'} · {formatMoney(Math.abs(balance))}</small>
     </div>
   )
 }
