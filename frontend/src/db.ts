@@ -24,19 +24,24 @@ export type TransactionType =
   | 'cardPayment'
 
 export type MoneySourceBalanceMode = 'asset' | 'debt'
+export type MoneySourceFinancialKind = 'income' | 'expense' | 'debt' | 'lent'
 
 export interface MoneySource {
   id?: number
   name: string
   type: string
+  financialKind?: MoneySourceFinancialKind
   initialBalance: number
   balanceMode?: MoneySourceBalanceMode
+  creditLimit?: number
+  includeInTotal?: boolean
   openingBalanceTransactionId?: number
 }
 
 export interface Budget {
   id?: number
   category: string
+  subcategories?: string[]
   limit: number
   month: string
 }
@@ -74,6 +79,7 @@ export interface MochiPointsRecord {
   total: number
   unlockedAccessories?: string[]
   checkInDates?: string[]
+  categorySetupCompleted?: boolean
   onboardingEnabled?: boolean
   onboardingCompletedPages?: string[]
 }

@@ -47,10 +47,9 @@ const guideSteps: Record<GuidePage, GuideStep[]> = {
     { target: 'home-sidebar', title: 'Menu dashboard', description: 'Menu bên trái đưa bạn tới Home, Biểu đồ, Tủ đồ và các khu vực quản lý. Mỗi giao diện sẽ có hướng dẫn riêng khi bạn mở lần đầu.' },
     { target: 'home-checkin', title: 'Điểm danh mỗi ngày', description: 'Nhấn “Điểm danh” một lần mỗi ngày để duy trì streak. Chuỗi ngày sẽ được lưu trong tài khoản trên thiết bị này.' },
     { target: 'home-summary', title: 'Tổng quan tài chính', description: 'Home hiển thị tổng thu, tổng chi và tổng cộng số dư của tất cả nguồn MO. Nguồn âm hoặc nguồn nợ được tính âm. Nhấn “Xem thêm số liệu” để xem thêm tổng nợ và MO đang cho mượn.' },
-    { target: 'home-budget-bubbles', title: 'Mochi ngân sách', description: 'Mỗi viên Mochi đại diện cho một danh mục ngân sách. Trên máy tính, nhấn giữ rồi kéo viên Mochi; trên điện thoại, chạm giữ và kéo bằng ngón tay.' },
-    { target: 'home-mochi-jar', title: 'Thả Mochi vào hũ', description: 'Kéo Mochi vào hũ rồi thả chuột hoặc nhấc ngón tay. Mochi sẽ rơi vào trong hũ; nhập số MO đã dùng để ghi khoản chi cho danh mục đó.' },
-    { target: 'home-source-summary', title: 'Nguồn MO của bạn', description: 'Xem từng loại nguồn, số lượng và số dư. Nguồn được đặt là “Khoản nợ” hoặc có số dư âm sẽ được tính vào tổng nợ.' },
-    { target: 'home-recent', title: 'Giao dịch gần đây', description: 'Home chỉ hiển thị tối đa 5 giao dịch trong 1–3 ngày trước. Mục này để xem nhanh, không có nút sửa hay xóa.' },
+    { target: 'home-budget-bubbles', title: 'Chọn nguồn MO', description: 'Các biểu tượng phía trên đại diện cho nguồn MO của bạn. Trên máy tính, kéo một biểu tượng bằng chuột; trên điện thoại, chạm giữ rồi kéo vào hũ.' },
+    { target: 'home-mochi-jar', title: 'Chi vào hũ danh mục', description: 'Thả nguồn MO vào hũ đang chọn để nhập khoản chi. Nhấn vào hũ để mở danh mục nhỏ; chọn một mục hoặc dấu + để thêm mục mới. Khoản chi được ghi vào giao dịch và vẫn cộng vào tổng của hũ cha.' },
+    { target: 'home-recent', title: 'Giao dịch gần đây', description: 'Xem nhanh các giao dịch trong 3 ngày gần nhất dưới dạng bong bóng chat. Đây chỉ là tóm tắt; muốn sửa giao dịch, vào mục Giao dịch trong dashboard.' },
   ],
   charts: [
     { target: 'charts-summary', title: 'Tổng quan', description: 'Các thẻ cho biết thu, chi, tài sản ròng, tổng nợ MO và MO đang cho mượn.' },
@@ -63,7 +62,7 @@ const guideSteps: Record<GuidePage, GuideStep[]> = {
   ],
   budgets: [
     { target: 'budgets-form', title: 'Tạo ngân sách', description: 'Nhập danh mục và hạn mức. Mở “Tùy chọn nâng cao” nếu muốn đổi tháng áp dụng.' },
-    { target: 'budgets-list', title: 'Theo dõi ngân sách', description: 'Xem khoản đã chi và số MO còn lại. Trên Home, kéo hoặc chạm giữ viên Mochi của danh mục rồi thả vào hũ để ghi khoản chi.' },
+    { target: 'budgets-list', title: 'Theo dõi ngân sách', description: 'Xem khoản đã chi và số MO còn lại. Trên Home, kéo nguồn MO vào hũ danh mục để ghi khoản chi; giao dịch có thể chỉnh sửa tại trang Giao dịch.' },
   ],
   goals: [
     { target: 'goals-form', title: 'Tạo mục tiêu', description: 'Đặt tên và số MO mong muốn. Hạn hoàn thành nằm trong “Tùy chọn nâng cao”.' },
