@@ -1,6 +1,7 @@
 const ACCOUNT_STORAGE_KEY = 'mochi-local-accounts'
 const SESSION_STORAGE_KEY = 'mochi-local-session'
 const PBKDF2_ITERATIONS = 210_000
+const USERNAME_PATTERN = /^[\p{L}\p{N} ._'’-]{2,30}$/u
 
 export type LocalAccount = {
   username: string
@@ -103,7 +104,11 @@ export const getSignedInAccountStorageKey = () => {
 
 export const createLocalAccount = async (username: string, password: string) => {
   const accounts = getLocalAccounts()
-  const normalizedUsername = username.trim().toLocaleLowerCase('vi-VN')
+  const trimmedUsername = username.trim()
+  if (!USERNAME_PATTERN.test(trimmedUsername)) {
+    throw new Error('Tên cần dài 2–30 ký tự; chỉ dùng chữ, số, dấu cách hoặc . _ \' -')
+  }
+  const normalizedUsername = trimmedUsername.toLocaleLowerCase('vi-VN')
   if (accounts.some((account) => account.username.trim().toLocaleLowerCase('vi-VN') === normalizedUsername)) {
     throw new Error('Tên tài khoản này đã được tạo trên thiết bị. Hãy đăng nhập hoặc chọn tên khác.')
   }
@@ -113,7 +118,7 @@ export const createLocalAccount = async (username: string, password: string) => 
 
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const account: LocalAccount = {
-    username,
+    username: trimmedUsername,
     storageKey: `account-${normalizedUsername}`,
     salt: encodeBase64(salt),
     passwordHash: await hashPassword(password, salt),

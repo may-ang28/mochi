@@ -2795,6 +2795,47 @@ button {
   line-height: 1.6;
 }
 
+.settings-backup {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e8dce2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.settings-backup h3 {
+  margin: 0;
+  color: #58434f;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-backup > p {
+  margin: 0;
+  color: #927987;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.settings-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .settings-reset {
   display: grid;
   gap: 8px;

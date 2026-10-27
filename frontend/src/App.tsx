@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import {
   db,
   type Budget,
@@ -25,6 +25,7 @@ import {
   signOutLocalAccount,
   verifyLocalAccountPassword,
 } from './auth'
+import { backupPreferenceKeys, parseMochiBackup } from './backup'
 import './App.css'
 
 type Page = 'home' | 'charts' | 'wardrobe' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
@@ -136,12 +137,8 @@ const getInitialBackgroundColor = () => {
 }
 const defaultMoneySourceTypes = [
   'Tiền mặt',
-  'Tài khoản ngân hàng',
-  'Thẻ',
-  'Thẻ tín dụng',
+  'Tài khoản',
   'Thẻ ghi nợ',
-  'Thẻ trả trước',
-  'Ví điện tử',
 ]
 const MONEY_SOURCE_TYPES_KEY = 'mochi-money-source-types'
 const defaultCategoryOptions = [
@@ -323,6 +320,8 @@ function App() {
   const [authError, setAuthError] = useState(storedAuth.error)
   const [resetPassword, setResetPassword] = useState('')
   const [isResettingData, setIsResettingData] = useState(false)
+  const [isImportingBackup, setIsImportingBackup] = useState(false)
+  const backupFileInput = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState<Page>('home')
   const [isDashboardOpen, setIsDashboardOpen] = useState(true)
   const [backgroundColor, setBackgroundColor] = useState(getInitialBackgroundColor)
@@ -391,7 +390,7 @@ function App() {
   const [newCategoryOption, setNewCategoryOption] = useState('')
   const [editingCategoryOption, setEditingCategoryOption] = useState<string | null>(null)
   const [categoryOptionDraft, setCategoryOptionDraft] = useState('')
-  const [sourceInitialBalance, setSourceInitialBalance] = useState('')
+  const [sourceInitialBalance, setSourceInitialBalance] = useState('0')
   const [sourceBalanceMode, setSourceBalanceMode] = useState<MoneySourceBalanceMode>('asset')
   const [sourceOpeningDate, setSourceOpeningDate] = useState(today())
   const [editingSourceId, setEditingSourceId] = useState<number | null>(null)
@@ -453,11 +452,7 @@ function App() {
         setGoalContributions(allGoalContributions)
         setTasks(allTasks)
         setMoneySources(allMoneySources)
-        setMoneySourceTypes(readOptionList(
-          MONEY_SOURCE_TYPES_KEY,
-          defaultMoneySourceTypes,
-          allMoneySources.map((source) => source.type),
-        ))
+        setMoneySourceTypes(readOptionList(MONEY_SOURCE_TYPES_KEY, defaultMoneySourceTypes))
         setCategoryOptions(readOptionList(
           CATEGORY_OPTIONS_KEY,
           defaultCategoryOptions,
@@ -675,6 +670,109 @@ function App() {
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Đã xảy ra lỗi. Vui lòng thử lại.')
     }
+  }
+
+  const exportAccountBackup = () => {
+    void runAction(async () => {
+      const [allTransactions, allBudgets, allGoals, allGoalContributions, allTasks, allMoneySources, allPoints] =
+        await Promise.all([
+          db.transactions.toArray(),
+          db.budgets.toArray(),
+          db.goals.toArray(),
+          db.goalContributions.toArray(),
+          db.tasks.toArray(),
+          db.moneySources.toArray(),
+          db.points.toArray(),
+        ])
+      const preferences = Object.fromEntries(
+        backupPreferenceKeys.map((key) => [key, localStorage.getItem(getAccountPreferenceKey(key))]),
+      )
+      const backup = {
+        format: 'mochi-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        tables: {
+          transactions: allTransactions,
+          budgets: allBudgets,
+          goals: allGoals,
+          goalContributions: allGoalContributions,
+          tasks: allTasks,
+          moneySources: allMoneySources,
+          points: allPoints,
+        },
+        preferences,
+      }
+      const file = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const downloadUrl = URL.createObjectURL(file)
+      const downloadLink = document.createElement('a')
+      downloadLink.href = downloadUrl
+      downloadLink.download = `mochi-backup-${today()}.json`
+      downloadLink.click()
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+    })
+  }
+
+  const importAccountBackup = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+
+    setIsImportingBackup(true)
+    void runAction(async () => {
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('Tệp sao lưu quá lớn. Hãy chọn tệp nhỏ hơn 25 MB.')
+      }
+
+      let parsedFile: unknown
+      try {
+        parsedFile = JSON.parse(await file.text())
+      } catch {
+        throw new Error('Không đọc được tệp JSON. Hãy chọn một tệp sao lưu Mochi hợp lệ.')
+      }
+      const backup = parseMochiBackup(parsedFile)
+      if (!window.confirm('Nhập bản sao lưu sẽ thay thế toàn bộ dữ liệu Mochi của tài khoản hiện tại. Tài khoản và mật khẩu sẽ không bị thay đổi. Bạn có chắc chắn muốn tiếp tục?')) {
+        return
+      }
+
+      const oldPreferences = backupPreferenceKeys.map((key) => ({
+        key: getAccountPreferenceKey(key),
+        value: localStorage.getItem(getAccountPreferenceKey(key)),
+      }))
+      try {
+        backupPreferenceKeys.forEach((key) => {
+          const value = backup.preferences[key]
+          const storageKey = getAccountPreferenceKey(key)
+          if (value === null) localStorage.removeItem(storageKey)
+          else localStorage.setItem(storageKey, value)
+        })
+
+        const accountDataTables = db.tables
+        await db.transaction('rw', accountDataTables, async () => {
+          await Promise.all(accountDataTables.map((table) => table.clear()))
+          await Promise.all([
+            db.transactions.bulkPut(backup.tables.transactions),
+            db.budgets.bulkPut(backup.tables.budgets),
+            db.goals.bulkPut(backup.tables.goals),
+            db.goalContributions.bulkPut(backup.tables.goalContributions),
+            db.tasks.bulkPut(backup.tables.tasks),
+            db.moneySources.bulkPut(backup.tables.moneySources),
+            db.points.bulkPut(backup.tables.points),
+          ])
+        })
+      } catch (importError) {
+        try {
+          oldPreferences.forEach(({ key, value }) => {
+            if (value === null) localStorage.removeItem(key)
+            else localStorage.setItem(key, value)
+          })
+        } catch {
+          throw new Error('Không thể hoàn tất nhập bản sao lưu hoặc khôi phục tùy chỉnh cũ. Hãy kiểm tra dữ liệu Mochi trước khi thử lại.')
+        }
+        throw importError
+      }
+
+      window.location.reload()
+    }).finally(() => setIsImportingBackup(false))
   }
 
   const completeOnboardingPage = (completedPage: Page) => {
@@ -915,6 +1013,13 @@ function App() {
     })
   }
 
+  const scrollToForm = (selector: string) => {
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(selector)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   const editTransaction = (transaction: Transaction) => {
     setEditingTransactionId(transaction.id ?? null)
     setTransactionType(transaction.type)
@@ -925,6 +1030,7 @@ function App() {
     setNote(transaction.note ?? '')
     setDate(transaction.date)
     setTransactionSourceId(transaction.sourceId === undefined ? '' : String(transaction.sourceId))
+    scrollToForm('[data-tour-target="transactions-form"]')
   }
 
   const deleteTransaction = (id: number) => {
@@ -1023,7 +1129,7 @@ function App() {
       setSourceName('')
       setSourceType('')
       setSourceFinancialKind('')
-      setSourceInitialBalance('')
+      setSourceInitialBalance('0')
       setSourceCreditLimit('')
       setSourceIncludeInTotal(true)
       setSourceBalanceMode('asset')
@@ -1043,6 +1149,7 @@ function App() {
     setSourceOpeningDate(
       transactions.find((transaction) => transaction.id === source.openingBalanceTransactionId)?.date ?? today(),
     )
+    scrollToForm('[data-tour-target="sources-form"]')
   }
 
   const persistMoneySourceTypes = (nextTypes: string[]) => {
@@ -1295,6 +1402,7 @@ function App() {
     setGoalTargetAmount(String(goal.targetAmount))
     setGoalSavedAmount(String(goal.savedAmount))
     setGoalDeadline(goal.deadline)
+    scrollToForm('[data-tour-target="goals-form"]')
   }
 
   const deleteGoal = (id: number) => {
@@ -1398,6 +1506,7 @@ function App() {
     setSavingAmount(String(contribution.amount))
     setSavingDate(contribution.date)
     setSavingSourceId(String(contribution.sourceId))
+    scrollToForm('.saving-form')
   }
 
   const deleteGoalContribution = (contribution: GoalContribution) => {
@@ -2084,7 +2193,7 @@ function App() {
                       <div className="mochi-jar-illustration" aria-hidden="true">
                         <span className={`jar-lid${isActiveJarOpen ? ' open' : ''}`} />
                         <span className="jar-glass">
-                          {Array.from({ length: activeBudgetDetail ? budgetMochiCount(activeBudgetDetail) : 6 }, (_, index) => (
+                          {Array.from({ length: activeBudgetDetail ? budgetMochiCount(activeBudgetDetail) : 0 }, (_, index) => (
                             <MochiMascot className="jar-mochi" key={index} />
                           ))}
                           {mochiDropId > 0 && (
@@ -2124,7 +2233,7 @@ function App() {
                       <div className="mochi-jar-illustration">
                         <span className="jar-lid" />
                         <span className="jar-glass">
-                          {Array.from({ length: 6 }, (_, index) => <MochiMascot className="jar-mochi" key={index} />)}
+                          {Array.from({ length: incomingBudget ? budgetMochiCount(incomingBudget) : 0 }, (_, index) => <MochiMascot className="jar-mochi" key={index} />)}
                         </span>
                       </div>
                       <p className="featured-jar-type">NGÂN SÁCH · {currentMonth()}</p>
@@ -2506,7 +2615,7 @@ function App() {
                               <div className="progress-track"><div className={`progress-fill${spent > budget.limit ? ' danger' : ''}`} style={{ width: `${percentage}%` }} /></div>
                               {spent > budget.limit && <p className="over-budget-note">Vượt {formatMoney(spent - budget.limit)}</p>}
                               <div className="item-actions">
-                                <button type="button" className="text-button" onClick={() => { setEditingBudgetId(budget.id ?? null); setBudgetCategory(budget.category); setBudgetLimit(String(budget.limit)); setBudgetMonth(budget.month) }}>Sửa</button>
+                                <button type="button" className="text-button" onClick={() => { setEditingBudgetId(budget.id ?? null); setBudgetCategory(budget.category); setBudgetLimit(String(budget.limit)); setBudgetMonth(budget.month); scrollToForm('[data-tour-target="budgets-form"]') }}>Sửa</button>
                                 {budget.id !== undefined && <button type="button" className="text-button danger-text" onClick={() => deleteBudget(budget.id!)}>Xóa</button>}
                               </div>
                             </article>
@@ -2657,7 +2766,7 @@ function App() {
                   <section className="content-card" data-tour-target="sources-form">
                     <SectionHeading
                       title={editingSourceId === null ? 'Thêm nguồn MO' : 'Chỉnh sửa nguồn MO'}
-                      detail="Chọn riêng từng nguồn là MO có sẵn hoặc khoản nợ; nguồn có thể trùng loại."
+                      detail="Chọn nhóm nguồn và dấu cộng/trừ; bạn có thể tạo nhiều nguồn cùng loại."
                     />
                     <form className="form-grid" onSubmit={saveMoneySource}>
                       <label>Tên nguồn MO<input autoCorrect="on" spellCheck maxLength={50} value={sourceName} onChange={(event) => setSourceName(event.target.value)} placeholder="Không bắt buộc" /></label>
@@ -2679,6 +2788,16 @@ function App() {
                             <option key={kind} value={kind}>{label}</option>
                           ))}
                         </select>
+                      </label>
+                      <label>Dấu khi tính Tổng cộng
+                        <select
+                          value={sourceBalanceMode}
+                          onChange={(event) => setSourceBalanceMode(event.target.value as MoneySourceBalanceMode)}
+                        >
+                          <option value="asset">+ Cộng vào Tổng cộng</option>
+                          <option value="debt">− Trừ khỏi Tổng cộng</option>
+                        </select>
+                        <small className="source-accounting-hint">Chọn dấu “−” cho khoản nợ.</small>
                       </label>
                       {isDebitCardSource(sourceType) && (
                         <>
@@ -2703,15 +2822,6 @@ function App() {
                       <details className="form-advanced">
                         <summary>Tùy chọn nâng cao</summary>
                         <div className="form-advanced-content">
-                          <label>Cách tính nguồn MO
-                            <select value={sourceBalanceMode} onChange={(event) => setSourceBalanceMode(event.target.value as MoneySourceBalanceMode)}>
-                              <option value="asset">MO có sẵn</option>
-                              <option value="debt">Khoản nợ</option>
-                            </select>
-                            <small className="source-accounting-hint">
-                              Nguồn nợ: khoản chi tăng nợ; dùng “Trả khoản nợ” để trừ nợ và nguồn MO thanh toán.
-                            </small>
-                          </label>
                           <label>Ngày ghi nhận số dư ban đầu<input required type="date" value={sourceOpeningDate} onChange={(event) => setSourceOpeningDate(event.target.value)} /></label>
                           <div className="source-type-manager">
                             <strong>Danh sách loại nguồn</strong>
@@ -2753,11 +2863,11 @@ function App() {
                           </div>
                         </div>
                       </details>
-                      <label>{sourceBalanceMode === 'debt' ? 'Số nợ MO ban đầu' : 'Số dư MO ban đầu'}<MOAmountInput value={sourceInitialBalance} onChange={setSourceInitialBalance} placeholder="0" allowNegative={sourceBalanceMode !== 'debt'} required /></label>
+                      <label>{sourceBalanceMode === 'debt' ? 'Tiền ban đầu (nợ)' : 'Tiền ban đầu'}<MOAmountInput value={sourceInitialBalance} onChange={setSourceInitialBalance} placeholder="0" allowNegative={sourceBalanceMode !== 'debt'} required /></label>
                       {sourceBalanceMode !== 'debt' && <small className="source-accounting-hint">Số dư âm sẽ tự động được tính vào tổng nợ MO.</small>}
                       <div className="form-actions">
                         <button className="primary-button" type="submit">{editingSourceId === null ? '+ Thêm nguồn MO' : 'Lưu thay đổi'}</button>
-                        {editingSourceId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingSourceId(null); setSourceName(''); setSourceType(''); setSourceFinancialKind(''); setSourceInitialBalance(''); setSourceCreditLimit(''); setSourceIncludeInTotal(true); setSourceBalanceMode('asset'); setSourceOpeningDate(today()) }}>Hủy</button>}
+                        {editingSourceId !== null && <button className="quiet-button" type="button" onClick={() => { setEditingSourceId(null); setSourceName(''); setSourceType(''); setSourceFinancialKind(''); setSourceInitialBalance('0'); setSourceCreditLimit(''); setSourceIncludeInTotal(true); setSourceBalanceMode('asset'); setSourceOpeningDate(today()) }}>Hủy</button>}
                       </div>
                     </form>
                   </section>
@@ -2827,6 +2937,31 @@ function App() {
                   <section className="content-card" data-tour-target="settings-data">
                     <SectionHeading title="Dữ liệu" detail="Thông tin nơi lưu dữ liệu Mochi." />
                     <p className="settings-note">Giao dịch, mục tiêu và nguồn MO được lưu trong trình duyệt này. Xóa dữ liệu trang web có thể làm mất các thông tin đó.</p>
+                    <div className="settings-backup">
+                      <h3>Sao lưu và khôi phục</h3>
+                      <p>Bản sao lưu JSON bao gồm dữ liệu tài chính và tùy chỉnh giao diện, nhưng không chứa tài khoản hoặc mật khẩu.</p>
+                      <div className="settings-backup-actions">
+                        <button className="secondary-button" type="button" onClick={exportAccountBackup}>
+                          Xuất dữ liệu dự phòng (JSON)
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => backupFileInput.current?.click()}
+                          disabled={isImportingBackup}
+                        >
+                          {isImportingBackup ? 'Đang nhập…' : 'Nhập dữ liệu'}
+                        </button>
+                        <input
+                          ref={backupFileInput}
+                          className="visually-hidden"
+                          type="file"
+                          accept="application/json,.json"
+                          aria-label="Chọn tệp sao lưu Mochi dạng JSON"
+                          onChange={importAccountBackup}
+                        />
+                      </div>
+                    </div>
                     <div className="settings-reset">
                       <h3>Đặt lại dữ liệu Mochi</h3>
                       <p>Giao dịch, nguồn MO, ngân sách, mục tiêu, nhiệm vụ, tiến trình Mochi và các tùy chỉnh sẽ bị xóa. Tài khoản và mật khẩu đăng nhập vẫn được giữ lại.</p>
