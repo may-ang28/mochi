@@ -1241,6 +1241,12 @@ function App() {
                 <div>
                   <p className="dashboard-eyebrow">GÓC NHỎ CỦA BẠN</p>
                 </div>
+                <div className="home-header-stickers" aria-hidden="true">
+                  <span className="sticker-bow">🎀</span>
+                  <span className="sticker-heart-button">♥</span>
+                  <span className="sticker-vinyl"><i /></span>
+                  <span className="sticker-envelope"><i /></span>
+                </div>
               </header>
 
               <section className="home-quote" aria-label="Trích dẫn hôm nay">

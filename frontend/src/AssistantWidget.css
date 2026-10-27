@@ -412,3 +412,130 @@
     transition: none;
   }
 }
+
+.assistant-panel {
+  border: 2px solid #292a26;
+  border-radius: 13px 10px 16px 12px;
+  background: #fff7e8;
+  box-shadow: 4px 5px 0 #292a26;
+}
+
+.assistant-header {
+  border-bottom: 2px solid #292a26;
+  background: #f3b4a9;
+}
+
+.assistant-header-copy h2,
+.assistant-header-copy p {
+  color: #292a26;
+}
+
+.assistant-close {
+  border: 1.5px solid #292a26;
+  border-radius: 7px 10px 8px 9px;
+  background: #fff7e8;
+  color: #292a26;
+}
+
+.assistant-close:hover {
+  background: #ecc05a;
+}
+
+.assistant-message {
+  border: 1.5px solid #292a26;
+  border-radius: 13px 10px 14px 11px;
+  box-shadow: 2px 2px 0 #292a26;
+}
+
+.assistant-message-assistant {
+  background: #fff0d3;
+}
+
+.assistant-message-user {
+  background: #dce5d2;
+}
+
+.assistant-compose input {
+  border: 2px solid #292a26;
+  border-radius: 8px 10px 7px 9px;
+  background: #fffdf7;
+}
+
+.assistant-compose button {
+  border: 2px solid #292a26;
+  border-radius: 8px 10px 7px 9px;
+  background: #f3b4a9;
+  box-shadow: 2px 2px 0 #292a26;
+  color: #292a26;
+}
+
+.assistant-compose button:hover:not(:disabled) {
+  background: #ecc05a;
+}
+
+/* Sticker-sheet chat chrome */
+.assistant-widget {
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+.assistant-panel {
+  border: 2px solid #211b2a;
+  border-radius: 12px 9px 15px 10px;
+  background: #fffaf3;
+  box-shadow: 5px 5px 0 #211b2a;
+}
+
+.assistant-header {
+  border-bottom: 2px solid #211b2a;
+  background: linear-gradient(100deg, #f3abc4, #c1b6dc);
+}
+
+.assistant-header-copy h2,
+.assistant-header-copy p {
+  color: #211b2a;
+}
+
+.assistant-close {
+  border: 1.5px solid #211b2a;
+  border-radius: 6px 8px 7px 9px;
+  background: #fffaf3;
+  color: #211b2a;
+}
+
+.assistant-close:hover {
+  background: #f2c462;
+}
+
+.assistant-message {
+  border: 1.5px solid #211b2a;
+  border-radius: 12px 9px 13px 10px;
+  box-shadow: 2px 2px 0 #211b2a;
+}
+
+.assistant-message-assistant {
+  background: #f8e9ee;
+}
+
+.assistant-message-user {
+  background: #e5def1;
+}
+
+.assistant-compose input {
+  border: 2px solid #211b2a;
+  border-radius: 7px 9px 6px 8px;
+  background: #fffdf8;
+}
+
+.assistant-compose button {
+  border: 2px solid #211b2a;
+  border-radius: 7px 9px 6px 8px;
+  background: #f3abc4;
+  box-shadow: 2px 2px 0 #211b2a;
+  color: #211b2a;
+  font-family: "Courier New", monospace;
+  font-weight: 800;
+}
+
+.assistant-compose button:hover:not(:disabled) {
+  background: #f2c462;
+}
