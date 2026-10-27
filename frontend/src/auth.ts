@@ -124,7 +124,7 @@ export const createLocalAccount = async (username: string, password: string) => 
   localStorage.setItem(SESSION_STORAGE_KEY, username)
 }
 
-export const signInLocalAccount = async (username: string, password: string) => {
+export const verifyLocalAccountPassword = async (username: string, password: string) => {
   const normalizedUsername = username.trim().toLocaleLowerCase('vi-VN')
   const account = getLocalAccounts().find(
     (savedAccount) => savedAccount.username.trim().toLocaleLowerCase('vi-VN') === normalizedUsername,
@@ -141,8 +141,13 @@ export const signInLocalAccount = async (username: string, password: string) => 
     throw new Error('Tên tài khoản hoặc mật khẩu chưa chính xác.')
   }
 
-  localStorage.setItem(SESSION_STORAGE_KEY, account.username)
   return account.username
+}
+
+export const signInLocalAccount = async (username: string, password: string) => {
+  const verifiedUsername = await verifyLocalAccountPassword(username, password)
+  localStorage.setItem(SESSION_STORAGE_KEY, verifiedUsername)
+  return verifiedUsername
 }
 
 export const signOutLocalAccount = () => {

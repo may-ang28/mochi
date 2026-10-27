@@ -106,15 +106,16 @@
   width: 58px;
   height: 50px;
   border: 2px solid rgb(255 255 255 / 90%);
-  border-radius: 50% 50% 45% 45% / 65% 65% 38% 38%;
+  border-radius: 50% 50% 48% 52% / 51% 49% 51% 49%;
   background: linear-gradient(145deg, #ffb7d1 4%, #ff91b8 52%, #ed6e9b 100%);
   box-shadow: inset -6px -5px 0 rgb(190 68 113 / 15%), inset 5px 4px 0 rgb(255 255 255 / 28%), 0 8px 20px rgb(117 59 78 / 24%);
   animation: assistant-slime-float 4.2s ease-in-out infinite;
 }
 
 @keyframes assistant-slime-float {
-  0%, 100% { transform: translateY(0) rotate(-1deg); }
-  50% { transform: translateY(-3px) rotate(1deg); }
+  0%, 100% { transform: translateY(0) rotate(-1deg) scale(1); }
+  48% { transform: translateY(-3px) rotate(1deg) scale(1.025, 0.97); }
+  76% { transform: translateY(-1px) rotate(0) scale(0.985, 1.025); }
 }
 
 .assistant-slime::before {

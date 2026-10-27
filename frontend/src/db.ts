@@ -3,20 +3,34 @@ import { getSignedInAccountStorageKey } from './auth'
 
 export interface Transaction {
   id?: number
-  type: 'income' | 'expense'
+  type: TransactionType
   amount: number
   category: string
   note?: string
   date: string
   sourceId?: number
+  relatedSourceId?: number
+  counterparty?: string
   isOpeningBalance?: boolean
 }
+
+export type TransactionType =
+  | 'income'
+  | 'expense'
+  | 'borrow'
+  | 'repay'
+  | 'lend'
+  | 'collect'
+  | 'cardPayment'
+
+export type MoneySourceBalanceMode = 'asset' | 'debt'
 
 export interface MoneySource {
   id?: number
   name: string
   type: string
   initialBalance: number
+  balanceMode?: MoneySourceBalanceMode
   openingBalanceTransactionId?: number
 }
 
@@ -59,6 +73,9 @@ export interface MochiPointsRecord {
   id?: number
   total: number
   unlockedAccessories?: string[]
+  checkInDates?: string[]
+  onboardingEnabled?: boolean
+  onboardingCompletedPages?: string[]
 }
 
 export class MochiDB extends Dexie {
