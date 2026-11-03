@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import {
   db,
   type Budget,
@@ -7,6 +7,7 @@ import {
   type MoneySource,
   type MoneySourceBalanceMode,
   type MoneySourceFinancialKind,
+  type MochiPointsRecord,
   type Task,
   type Transaction,
   type TransactionType,
@@ -26,47 +27,36 @@ import {
   verifyLocalAccountPassword,
 } from './auth'
 import { backupPreferenceKeys, parseMochiBackup } from './backup'
+import Charts from './components/Charts'
+import DashboardIcon from './components/DashboardIcon'
+import EmptyState from './components/EmptyState'
+import HomeRecentTransactions from './components/HomeRecentTransactions'
+import LocalAuthScreen from './components/LocalAuthScreen'
+import MOAmountInput from './components/MOAmountInput'
+import MochiWordmark from './components/MochiWordmark'
+import MoneySourceIcon from './components/MoneySourceIcon'
+import SectionHeading from './components/SectionHeading'
+import SummaryCard from './components/SummaryCard'
+import Wardrobe, {
+  accessorySlots,
+  mochiColors,
+  type AccessoryOption,
+  type AccessorySlot,
+  type MochiOutfit,
+} from './components/Wardrobe'
+import { useMochiData } from './hooks/useMochiData'
+import {
+  calculateFinancialTotals,
+  getSourceBalance,
+  getSourceDisplayBalance,
+  isAssetSource,
+  isSourceDebt as getIsSourceDebt,
+} from './utils/finance'
 import './App.css'
 
 type Page = 'home' | 'charts' | 'wardrobe' | 'budgets' | 'goals' | 'tasks' | 'transactions' | 'sources' | 'settings'
 type DashboardIconName = Page | 'assistant'
 
-function DashboardIcon({ name }: { name: DashboardIconName }) {
-  return (
-    <svg className={`dashboard-icon dashboard-icon-${name}`} viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false">
-      <circle className="dashboard-icon-backdrop" cx="14" cy="14" r="13" />
-      <g className="dashboard-icon-stroke" strokeLinecap="round" strokeLinejoin="round">
-        {name === 'home' && <><path d="m6.5 13 7.5-6 7.5 6v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" /><path d="M11 22v-6h6v6" /></>}
-        {name === 'charts' && <><path d="M7 21V14h4v7M12 21V8h4v13M17 21v-9h4v9" /><path d="M6 22h16" /></>}
-        {name === 'wardrobe' && <><path d="M14 8a2.5 2.5 0 1 0-2.5-2.5" /><path d="m11.5 6-4.5 4 7 3 7-3-4.5-4" /><path d="m7 10 2 11h10l2-11" /></>}
-        {name === 'budgets' && <><path d="M9 6h10l-.7 3H9.7zM9.7 9h8.6l1.3 11a2 2 0 0 1-2 2h-7.2a2 2 0 0 1-2-2z" /><path d="M11 15h6" /></>}
-        {name === 'goals' && <><circle cx="14" cy="14" r="8" /><circle cx="14" cy="14" r="4" /><path d="m14 14 7-7M17 7h4v4" /></>}
-        {name === 'tasks' && <><rect x="7" y="6" width="14" height="17" rx="2" /><path d="m10 11 1.5 1.5L14 10M16 12h2M10 17l1.5 1.5L14 16M16 18h2" /></>}
-        {name === 'transactions' && <><rect x="6" y="7" width="16" height="14" rx="2.5" /><path d="M6 11h16M10 16h3M17 16h1" /><path d="M10 4v3M18 4v3" /></>}
-        {name === 'sources' && <><path d="M7 10.5h13a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h11" /><path d="M17 14h5v4h-5a2 2 0 0 1 0-4z" /><circle cx="17.5" cy="16" r=".5" /></>}
-        {name === 'settings' && <><circle cx="14" cy="14" r="3.2" /><path d="m11.5 5.7.5-1h4l.5 1 .2 1.4 1.4.8 1.3-.5 2 3.4-1 1-.8 1.4.2 1.5 1 1-2 3.4-1.4-.4-1.6.4-.8 1.2h-4l-.5-1.2-1.4-.8-1.4.4-2-3.4 1-1 .2-1.5-.8-1.4-1-1 2-3.4 1.4.5 1.4-.8z" /></>}
-        {name === 'assistant' && <><path d="M14 5.5 16 11l5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" /><path d="m20 4 .7 2.1L23 7l-2.3.8L20 10l-.8-2.2L17 7l2.2-.9z" /></>}
-      </g>
-    </svg>
-  )
-}
-
-type AccessorySlot = 'clip' | 'hat'
-type MochiOutfit = Record<AccessorySlot, string> & { color: string; expression: MascotExpression }
-type AccessoryOption = { id: string; label: string; icon: string; cost?: number }
-
-const accessorySlots: { id: AccessorySlot; label: string; options: AccessoryOption[] }[] = [
-  { id: 'clip', label: 'Kẹp tóc', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'bow', label: 'Nơ', icon: '🎀', cost: 10 }, { id: 'flower', label: 'Hoa', icon: '🌼', cost: 15 }, { id: 'star', label: 'Sao', icon: '⭐', cost: 20 }] },
-  { id: 'hat', label: 'Mũ', options: [{ id: 'none', label: 'Không', icon: '−' }, { id: 'cap', label: 'Mũ', icon: '🧢', cost: 15 }, { id: 'crown', label: 'Vương miện', icon: '👑', cost: 30 }, { id: 'berry', label: 'Mũ dâu', icon: '🍓', cost: 25 }] },
-]
-const mochiColors = [
-  { id: 'pink', label: 'Hồng mochi', color: '#ff91b8' },
-  { id: 'mint', label: 'Bạc hà', color: '#74c8a1' },
-  { id: 'sunshine', label: 'Nắng', color: '#f2c45e' },
-  { id: 'sky', label: 'Xanh trời', color: '#7eb9e8' },
-  { id: 'lilac', label: 'Tử đinh hương', color: '#ad91db' },
-  { id: 'peach', label: 'Đào', color: '#f29a78' },
-]
 const readMochiOutfit = (): MochiOutfit => {
   try {
     const saved = JSON.parse(localStorage.getItem(getAccountPreferenceKey('mochi-outfit')) ?? '{}') as Partial<MochiOutfit>
@@ -82,14 +72,6 @@ const readMochiOutfit = (): MochiOutfit => {
   } catch {
     return { clip: 'none', hat: 'none', color: 'pink', expression: 'happy' }
   }
-}
-
-function MochiWordmark({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className={`mochi-wordmark${compact ? ' compact' : ''}`} aria-label="Mochi logo">
-      <img className="mochi-logo-svg" src={`${import.meta.env.BASE_URL}mochi-logo.svg`} alt="Mochi" />
-    </div>
-  )
 }
 
 const navigation: { id: Page; label: string; icon: DashboardIconName; description: string }[] = [
@@ -111,10 +93,6 @@ const today = () => {
 }
 const currentMonth = () => today().slice(0, 7)
 const formatMoney = (amount: number) => `${amount.toLocaleString('vi-VN')} MO`
-const formatIntegerInput = (value: string) => {
-  const digits = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 16)
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-}
 const BACKGROUND_COLOR_KEY = 'mochi-background-color'
 const getAccountPreferenceKey = (key: string) => {
   const storageKey = getSignedInAccountStorageKey()
@@ -229,55 +207,7 @@ const moneySourceFinancialKindLabels: Record<MoneySourceFinancialKind, string> =
 const isDebitCardSource = (sourceType: string) =>
   sourceType.trim().toLocaleLowerCase('vi-VN') === 'thẻ ghi nợ'
 
-const isAssetSource = (source: MoneySource) => source.balanceMode !== 'debt'
 const sourceLabel = (source: MoneySource) => source.name.trim() || source.type
-
-function MoneySourceIcon({ sourceType }: { sourceType: string }) {
-  const normalizedType = sourceType.toLocaleLowerCase('vi')
-  const iconType = normalizedType.includes('tiền mặt') || normalizedType.includes('cash')
-    ? 'cash'
-    : normalizedType.includes('ngân hàng') || normalizedType.includes('tài khoản') || normalizedType.includes('bank')
-      ? 'bank'
-      : normalizedType.includes('thẻ') || normalizedType.includes('card')
-        ? 'card'
-        : normalizedType.includes('ví') || normalizedType.includes('wallet')
-          ? 'wallet'
-          : 'other'
-
-  return (
-    <svg className={`source-bubble-icon source-bubble-icon-${iconType}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      {iconType === 'cash' ? (
-        <>
-          <rect x="5" y="12" width="38" height="25" rx="5" />
-          <circle cx="24" cy="24.5" r="6" />
-          <path d="M10 18c3 0 5-2 5-4M38 31c-3 0-5 2-5 4" />
-        </>
-      ) : iconType === 'bank' ? (
-        <>
-          <path d="m5 17 19-11 19 11v3H5z" />
-          <path d="M9 22h30M7 39h34M11 24v12m9-12v12m8-12v12m9-12v12" />
-        </>
-      ) : iconType === 'card' ? (
-        <>
-          <rect x="5" y="10" width="38" height="28" rx="6" />
-          <path d="M6 19h36" />
-          <rect x="11" y="27" width="10" height="4" rx="2" />
-        </>
-      ) : iconType === 'wallet' ? (
-        <>
-          <path d="M8 13h29a4 4 0 0 1 4 4v20H10a5 5 0 0 1-5-5V16a3 3 0 0 1 3-3Z" />
-          <path d="M7 13V9a3 3 0 0 1 3-3h25v7m-1 9h8v8h-8a4 4 0 0 1 0-8Z" />
-          <circle cx="34" cy="26" r="1" />
-        </>
-      ) : (
-        <>
-          <circle cx="24" cy="24" r="17" />
-          <path d="M28 17c-1-2-3-3-5-3-3 0-5 2-5 4 0 7 12 3 12 10 0 3-3 6-7 6-3 0-6-2-7-4m8-19v24" />
-        </>
-      )}
-    </svg>
-  )
-}
 
 const getTransactionAmountSign = (type: TransactionType) =>
   ['income', 'borrow', 'collect'].includes(type) ? '+' : '−'
@@ -351,21 +281,13 @@ function App() {
   const budgetDropHandled = useRef(false)
   const touchSourceDrag = useRef<{ sourceId: number; startX: number; startY: number; moved: boolean } | null>(null)
   const suppressSourceClick = useRef(false)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [budgets, setBudgets] = useState<Budget[]>([])
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [error, setError] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
   const [taskReward, setTaskReward] = useState('10')
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
-  const [moneySources, setMoneySources] = useState<MoneySource[]>([])
   const [mochiPoints, setMochiPoints] = useState(0)
-    const [unlockedAccessories, setUnlockedAccessories] = useState<string[]>([])
+  const [unlockedAccessories, setUnlockedAccessories] = useState<string[]>([])
   const [pointsPulse, setPointsPulse] = useState(0)
-  const [error, setError] = useState('')
-  const [isDataLoading, setIsDataLoading] = useState(storedAuth.username !== null)
-
   const [transactionType, setTransactionType] = useState<TransactionType>('expense')
   const [relatedSourceId, setRelatedSourceId] = useState('')
   const [counterparty, setCounterparty] = useState('')
@@ -417,77 +339,59 @@ function App() {
   const [savingSourceId, setSavingSourceId] = useState('')
   const [editingContributionId, setEditingContributionId] = useState<number | null>(null)
 
+  const handleDataLoaded = useCallback(async (allTransactions: Transaction[], savedPoints: MochiPointsRecord | undefined) => {
+    const savedUnlocks = savedPoints?.unlockedAccessories ?? []
+    const persistedOutfit = readMochiOutfit()
+    const equippedLegacyAccessories = accessorySlots
+      .map(({ id }) => persistedOutfit[id] === 'none' ? null : `${id}:${persistedOutfit[id]}`)
+      .filter((accessory): accessory is string => accessory !== null)
+    const mergedUnlocks = [...new Set([...savedUnlocks, ...equippedLegacyAccessories])]
+    setMoneySourceTypes(readOptionList(MONEY_SOURCE_TYPES_KEY, defaultMoneySourceTypes))
+    setCategoryOptions(readOptionList(
+      CATEGORY_OPTIONS_KEY,
+      defaultCategoryOptions,
+      allTransactions.filter((transaction) => !transaction.isOpeningBalance).map((transaction) => transaction.category),
+    ))
+    setFrequentCategories(readOptionList(FREQUENT_CATEGORY_OPTIONS_KEY, []))
+    setMochiPoints(savedPoints?.total ?? 0)
+    setCheckInDates(savedPoints?.checkInDates ?? [])
+    setCategorySetupPending(savedPoints?.categorySetupCompleted === false)
+    setOnboardingEnabled(savedPoints?.onboardingEnabled ?? false)
+    setOnboardingCompletedPages(
+      (savedPoints?.onboardingCompletedPages ?? [])
+        .filter((savedPage) => savedPage === 'home' || navigation.some((item) => item.id === savedPage)) as Page[],
+    )
+    setUnlockedAccessories(mergedUnlocks)
+    if (mergedUnlocks.length !== savedUnlocks.length) {
+      await db.points.put({
+        ...savedPoints,
+        id: 1,
+        total: savedPoints?.total ?? 0,
+        unlockedAccessories: mergedUnlocks,
+      })
+    }
+  }, [])
+  const {
+    transactions,
+    budgets,
+    goals,
+    goalContributions,
+    tasks,
+    moneySources,
+    isDataLoading,
+    setIsDataLoading,
+    refreshTransactions,
+    refreshBudgets,
+    refreshGoals,
+    refreshGoalContributions,
+    refreshTasks,
+    refreshMoneySources,
+  } = useMochiData(username, storedAuth.username !== null, handleDataLoaded, setError)
+
   useEffect(() => {
     const splashTimer = window.setTimeout(() => setIsSplashVisible(false), 2200)
     return () => window.clearTimeout(splashTimer)
   }, [])
-
-  useEffect(() => {
-    if (!username) return
-    let active = true
-
-    const loadData = async () => {
-      try {
-        const [allTransactions, allBudgets, allGoals, allGoalContributions, allTasks, allMoneySources, savedPoints] =
-          await Promise.all([
-            db.transactions.toArray(),
-            db.budgets.toArray(),
-            db.goals.toArray(),
-            db.goalContributions.toArray(),
-            db.tasks.toArray(),
-            db.moneySources.toArray(),
-            db.points.get(1),
-          ])
-
-        if (!active) return
-        const savedUnlocks = savedPoints?.unlockedAccessories ?? []
-        const persistedOutfit = readMochiOutfit()
-        const equippedLegacyAccessories = accessorySlots
-          .map(({ id }) => persistedOutfit[id] === 'none' ? null : `${id}:${persistedOutfit[id]}`)
-          .filter((accessory): accessory is string => accessory !== null)
-        const mergedUnlocks = [...new Set([...savedUnlocks, ...equippedLegacyAccessories])]
-        setTransactions(allTransactions)
-        setBudgets(allBudgets)
-        setGoals(allGoals)
-        setGoalContributions(allGoalContributions)
-        setTasks(allTasks)
-        setMoneySources(allMoneySources)
-        setMoneySourceTypes(readOptionList(MONEY_SOURCE_TYPES_KEY, defaultMoneySourceTypes))
-        setCategoryOptions(readOptionList(
-          CATEGORY_OPTIONS_KEY,
-          defaultCategoryOptions,
-          allTransactions.filter((transaction) => !transaction.isOpeningBalance).map((transaction) => transaction.category),
-        ))
-        setFrequentCategories(readOptionList(FREQUENT_CATEGORY_OPTIONS_KEY, []))
-        setMochiPoints(savedPoints?.total ?? 0)
-        setCheckInDates(savedPoints?.checkInDates ?? [])
-        setCategorySetupPending(savedPoints?.categorySetupCompleted === false)
-        setOnboardingEnabled(savedPoints?.onboardingEnabled ?? false)
-        setOnboardingCompletedPages(
-          (savedPoints?.onboardingCompletedPages ?? [])
-            .filter((savedPage) => savedPage === 'home' || navigation.some((item) => item.id === savedPage)) as Page[],
-        )
-        setUnlockedAccessories(mergedUnlocks)
-        if (mergedUnlocks.length !== savedUnlocks.length) {
-          await db.points.put({
-            ...savedPoints,
-            id: 1,
-            total: savedPoints?.total ?? 0,
-            unlockedAccessories: mergedUnlocks,
-          })
-        }
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : 'Không thể tải dữ liệu.')
-        }
-      } finally {
-        if (active) setIsDataLoading(false)
-      }
-    }
-
-    void loadData()
-    return () => { active = false }
-  }, [username])
 
   useEffect(() => {
     const timer = window.setInterval(() => setLocalToday(getLocalDateKey()), 60_000)
@@ -635,33 +539,6 @@ function App() {
       }
     })()
   }
-
-  const refreshTransactions = async () => setTransactions(await db.transactions.toArray())
-  const refreshBudgets = async () => setBudgets(await db.budgets.toArray())
-  const refreshGoals = async () => setGoals(await db.goals.toArray())
-  const refreshGoalContributions = async () => setGoalContributions(await db.goalContributions.toArray())
-  const refreshTasks = async () => setTasks(await db.tasks.toArray())
-  const refreshMoneySources = async () => setMoneySources(await db.moneySources.toArray())
-
-  useEffect(() => {
-    if (!username) return
-    const completedTasks = tasks.filter((task) => task.completed && task.id !== undefined)
-    if (completedTasks.length === 0) return
-
-    const taskExpiry = (task: Task) => Date.parse(task.completedAt ?? `${task.date}T23:59:59`) + 3 * 24 * 60 * 60 * 1000
-    const nextExpiry = Math.min(...completedTasks.map(taskExpiry))
-    const timer = window.setTimeout(() => {
-      const expiredIds = completedTasks
-        .filter((task) => taskExpiry(task) <= Date.now())
-        .map((task) => task.id!)
-      if (expiredIds.length === 0) return
-      void db.tasks.bulkDelete(expiredIds).then(async () => setTasks(await db.tasks.toArray())).catch((taskError: unknown) => {
-        setError(taskError instanceof Error ? taskError.message : 'Không thể xóa nhiệm vụ đã hết hạn.')
-      })
-    }, Math.max(0, nextExpiry - Date.now()))
-
-    return () => window.clearTimeout(timer)
-  }, [tasks, username])
 
   const runAction = async (action: () => Promise<void>) => {
     setError('')
@@ -1637,12 +1514,7 @@ function App() {
     })
   }
 
-  const totalIncome = transactions
-    .filter((transaction) => transaction.type === 'income' && !transaction.isOpeningBalance)
-    .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const totalExpense = transactions
-    .filter((transaction) => transaction.type === 'expense' && !transaction.isOpeningBalance)
-    .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const { totalIncome, totalExpense, netWorth } = calculateFinancialTotals(transactions, moneySources)
   const outstandingCounterparties = [...transactions.reduce((balances, transaction) => {
     if (!transaction.counterparty) return balances
     const key = transaction.counterparty.trim().toLocaleLowerCase('vi-VN')
@@ -1654,28 +1526,9 @@ function App() {
     balances.set(key, entry)
     return balances
   }, new Map<string, { name: string; borrowed: number; lent: number }>()).values()]
-  const sourceBalance = (source: MoneySource) => {
-    const balance = source.initialBalance + transactions.reduce((sum, transaction) => {
-      if (transaction.isOpeningBalance) return sum
-      if (source.balanceMode === 'debt') {
-        if (transaction.relatedSourceId === source.id && transaction.type === 'cardPayment') {
-          return sum - transaction.amount
-        }
-        if (transaction.sourceId !== source.id) return sum
-        if (transaction.type === 'expense') return sum + transaction.amount
-        if (transaction.type === 'income') return sum - transaction.amount
-        return sum
-      }
-      if (transaction.sourceId !== source.id) return sum
-      if (['income', 'borrow', 'collect'].includes(transaction.type)) return sum + transaction.amount
-      if (['expense', 'repay', 'lend', 'cardPayment'].includes(transaction.type)) return sum - transaction.amount
-      return sum
-    }, 0)
-    return source.balanceMode === 'debt' ? Math.max(0, balance) : balance
-  }
-  const isSourceDebt = (source: MoneySource) => source.balanceMode === 'debt' || sourceBalance(source) < 0
-  const sourceDisplayBalance = (source: MoneySource) =>
-    isSourceDebt(source) ? Math.abs(sourceBalance(source)) : sourceBalance(source)
+  const sourceBalance = (source: MoneySource) => getSourceBalance(source, transactions)
+  const isSourceDebt = (source: MoneySource) => getIsSourceDebt(source, transactions)
+  const sourceDisplayBalance = (source: MoneySource) => getSourceDisplayBalance(source, transactions)
   const sourceLabelById = (sourceId: number | undefined, fallback: string) => {
     const source = moneySources.find((item) => item.id === sourceId)
     return source ? sourceLabel(source) : fallback
@@ -1691,12 +1544,6 @@ function App() {
   const totalDebt = cardDebtTotal + negativeSourceDebtTotal + personalDebtTotal
   const totalLent = outstandingCounterparties
     .reduce((sum, person) => sum + Math.max(0, person.lent), 0)
-  const netWorth = moneySources.reduce(
-    (sum, source) => sum + (source.includeInTotal === false
-      ? 0
-      : source.balanceMode === 'debt' ? -sourceBalance(source) : sourceBalance(source)),
-    0,
-  )
   const sourceTransactionCount = (sourceId: number) =>
     transactions.filter((transaction) =>
       transaction.sourceId === sourceId || transaction.relatedSourceId === sourceId,
@@ -1838,87 +1685,19 @@ function App() {
 
   if (!username) {
     return (
-      <main className="auth-screen">
-        <section className="auth-card">
-          <div className="auth-brand">
-            <span className="auth-mascot"><MochiMascot /></span>
-            <span>mochi</span>
-          </div>
-          <p className="auth-eyebrow">GÓC NHỎ CỦA RIÊNG BẠN</p>
-          <h1>{authMode === 'signup' ? 'Bắt đầu từ tên của bạn' : 'Chào mừng bạn trở lại'}</h1>
-          <p className="auth-description">
-            {authMode === 'signup'
-              ? 'Tạo hồ sơ để Mochi biết nên gọi bạn là gì.'
-              : 'Nhập tên tài khoản và mật khẩu đã lưu trên thiết bị này.'}
-          </p>
-
-          <div className="auth-tabs" role="tablist" aria-label="Chọn đăng ký hoặc đăng nhập">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'signup'}
-              className={authMode === 'signup' ? 'active' : ''}
-              onClick={() => { setAuthMode('signup'); setAuthError('') }}
-            >
-              Tạo tài khoản
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'signin'}
-              className={authMode === 'signin' ? 'active' : ''}
-              onClick={() => { setAuthMode('signin'); setAuthError('') }}
-            >
-              Đăng nhập
-            </button>
-          </div>
-
-          <form className="auth-form" onSubmit={submitAuth}>
-            <label>
-              {authMode === 'signup' ? 'Tên bạn muốn Mochi gọi' : 'Tên tài khoản'}
-              <input
-                autoComplete={authMode === 'signup' ? 'nickname' : allowPasswordManager ? 'username' : 'off'}
-                autoFocus={authMode === 'signup'}
-                maxLength={30}
-                minLength={2}
-                required
-                value={authName}
-                onChange={(event) => setAuthName(event.target.value)}
-                placeholder="Ví dụ: Linh"
-              />
-            </label>
-            <label>
-              Mật khẩu
-              <input
-                autoComplete={authMode === 'signup' ? 'new-password' : allowPasswordManager ? 'current-password' : 'off'}
-                autoFocus={authMode === 'signin'}
-                maxLength={128}
-                minLength={authMode === 'signup' ? 8 : undefined}
-                required
-                type="password"
-                value={authPassword}
-                onChange={(event) => setAuthPassword(event.target.value)}
-                placeholder={authMode === 'signup' ? 'Ít nhất 8 ký tự' : 'Nhập mật khẩu của bạn'}
-              />
-            </label>
-            {authMode === 'signin' && (
-              <label className="auth-remember-password">
-                <input
-                  type="checkbox"
-                  checked={allowPasswordManager}
-                  onChange={(event) => setAllowPasswordManager(event.target.checked)}
-                />
-                Cho phép trình duyệt đề xuất lưu mật khẩu
-              </label>
-            )}
-            {authError && <p className="auth-error" role="alert">{authError}</p>}
-            <button className="auth-submit" type="submit" disabled={authBusy}>
-              {authBusy ? 'Đang xử lý...' : authMode === 'signup' ? 'Tạo hồ sơ & vào Mochi' : 'Đăng nhập'}
-            </button>
-          </form>
-          <p className="auth-local-note">Có thể tạo nhiều tài khoản trên thiết bị này. Hồ sơ chỉ lưu trong trình duyệt này.</p>
-        </section>
-      </main>
+      <LocalAuthScreen
+        authMode={authMode}
+        authName={authName}
+        authPassword={authPassword}
+        allowPasswordManager={allowPasswordManager}
+        authBusy={authBusy}
+        authError={authError}
+        onAuthModeChange={(mode) => { setAuthMode(mode); setAuthError('') }}
+        onAuthNameChange={setAuthName}
+        onAuthPasswordChange={setAuthPassword}
+        onAllowPasswordManagerChange={setAllowPasswordManager}
+        onSubmit={submitAuth}
+      />
     )
   }
 
@@ -2343,33 +2122,12 @@ function App() {
                 )}
               </section>
 
-              <section className="home-recent-transactions" aria-label="Giao dịch gần đây" data-tour-target="home-recent">
-                <header className="home-section-heading">
-                  <div>
-                    <p className="dashboard-eyebrow">NHẬT KÝ</p>
-                    <h2>Giao dịch gần đây</h2>
-                  </div>
-                  <span className="home-recent-caption">3 ngày gần nhất</span>
-                </header>
-                {recentTransactions.length === 0 ? (
-                  <p className="home-empty-note">Chưa có giao dịch trong 3 ngày gần đây.</p>
-                ) : (
-                  <div className="home-recent-list">
-                    {recentTransactions.map((transaction) => (
-                      <div className={`home-chat-transaction ${transaction.type}`} key={transaction.id}>
-                        <time className="home-chat-transaction-date" dateTime={transaction.date}>
-                          {formatTransactionDate(transaction.date)}
-                        </time>
-                        <p className="home-chat-transaction-bubble">
-                          {transaction.type === 'expense'
-                            ? <>Bạn đã dùng {formatMoney(transaction.amount)} MO cho {transaction.category}</>
-                            : <>{transactionTypeLabels[transaction.type]} · {formatMoney(transaction.amount)} MO · {transaction.category}</>}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
+              <HomeRecentTransactions
+                transactions={recentTransactions}
+                transactionTypeLabels={transactionTypeLabels}
+                formatTransactionDate={formatTransactionDate}
+                formatMoney={formatMoney}
+              />
             </div>
           ) : pageDetails ? (
             <div className="page-shell">
@@ -2386,205 +2144,30 @@ function App() {
               {error && <div className="app-error" role="alert">{error}</div>}
 
               {page === 'charts' && (
-                <div className="page-content">
-                  <section className="content-card" data-tour-target="charts-summary">
-                    <SectionHeading title="Tổng quan dòng tiền" detail="Thu nhập và chi tiêu được ghi nhận trên thiết bị này." />
-                    <div className="summary-grid">
-                      <SummaryCard label="Tổng thu MO" value={formatMoney(totalIncome)} tone="income" />
-                      <SummaryCard label="Tổng chi MO" value={formatMoney(totalExpense)} tone="expense" />
-                      <SummaryCard label="Tổng cộng" value={formatMoney(netWorth)} tone="balance" />
-                      <SummaryCard label="Nợ MO" value={formatMoney(totalDebt)} tone="debt" />
-                      <SummaryCard label="MO cho mượn" value={formatMoney(totalLent)} tone="lent" />
-                    </div>
-                  </section>
-                  <section className="content-card" data-tour-target="charts-flow">
-                    <SectionHeading title="Thu và chi" detail="Sáu tháng gần nhất" />
-                    <div className="cashflow-legend" aria-hidden="true">
-                      <span><i className="income" /> Thu nhập</span>
-                      <span><i className="expense" /> Chi tiêu</span>
-                    </div>
-                    <div className="cashflow-plot" role="group" aria-label="Biểu đồ thu nhập và chi tiêu trong sáu tháng gần nhất">
-                      {cashflowMonths.map((month) => (
-                        <div
-                          className="cashflow-month"
-                          key={month.key}
-                          tabIndex={0}
-                          role="group"
-                          aria-label={`${month.label}: thu ${formatMoney(month.income)}, chi ${formatMoney(month.expense)}`}
-                        >
-                          <div className="cashflow-tooltip" aria-hidden="true">
-                            <strong>{month.label}</strong>
-                            <span><i className="income" />Thu {formatMoney(month.income)}</span>
-                            <span><i className="expense" />Chi {formatMoney(month.expense)}</span>
-                          </div>
-                          <div className="cashflow-bars">
-                            <span
-                              className="cashflow-bar income"
-                              style={{ height: `${month.income ? Math.max(4, (month.income / cashflowMax) * 100) : 0}%` }}
-                              title={`Thu nhập ${formatMoney(month.income)}`}
-                            />
-                            <span
-                              className="cashflow-bar expense"
-                              style={{ height: `${month.expense ? Math.max(4, (month.expense / cashflowMax) * 100) : 0}%` }}
-                              title={`Chi tiêu ${formatMoney(month.expense)}`}
-                            />
-                          </div>
-                          <span className="cashflow-month-label">{month.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="content-card" data-tour-target="charts-categories">
-                    <SectionHeading title="Chi tiêu theo danh mục" detail={`${expenseCategoryTotals.length} danh mục`} />
-                    {expenseCategoryTotals.length === 0 ? <EmptyState text="Chưa có khoản chi nào để hiển thị." /> : (
-                      <div className="category-chart-list">
-                        {expenseCategoryTotals.map(([categoryName, total]) => (
-                          <div className="category-chart-row" key={categoryName}>
-                            <div><strong>{categoryName}</strong><span>{formatMoney(total)}</span></div>
-                            <span className="category-chart-track"><span style={{ width: `${totalExpense ? (total / totalExpense) * 100 : 0}%` }} /></span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                </div>
+                <Charts
+                  totalIncome={totalIncome}
+                  totalExpense={totalExpense}
+                  netWorth={netWorth}
+                  totalDebt={totalDebt}
+                  totalLent={totalLent}
+                  cashflowMonths={cashflowMonths}
+                  cashflowMax={cashflowMax}
+                  expenseCategoryTotals={expenseCategoryTotals}
+                  formatMoney={formatMoney}
+                />
               )}
 
               {page === 'wardrobe' && (
-                <div className="page-content">
-                  <section className="mochi-dresser" aria-label="Thiết kế phụ kiện cho Mochi" data-tour-target="wardrobe-stage">
-                    <header className="mochi-dresser-heading">
-                      <div>
-                        <p className="dashboard-eyebrow">CỬA HÀNG & TỦ ĐỒ</p>
-                        <h2>Cửa hàng & tủ đồ Mochi</h2>
-                      </div>
-                      <div className="wardrobe-header-actions">
-                        <span className="dresser-level" aria-live="polite">⭐ {mochiPoints} sao Mochi</span>
-                        <button className="primary-button wardrobe-save-button" type="button" onClick={saveMochiOutfit} disabled={!outfitHasChanges}>
-                          {outfitHasChanges ? 'Lưu Mochi' : 'Đã lưu'}
-                        </button>
-                      </div>
-                    </header>
-                    <div className="mochi-dresser-layout">
-                      <div className="wardrobe-stage" aria-label="Mochi với màu sắc và phụ kiện đã chọn">
-                        {(['hat', 'clip'] as AccessorySlot[]).map((slot) => {
-                          const accessory = accessorySlots.find((item) => item.id === slot)?.options.find((item) => item.id === mochiOutfit[slot])
-                          return accessory && accessory.id !== 'none'
-                            ? <span className={`wardrobe-wearable wardrobe-${slot}`} key={slot}>{accessory.icon}</span>
-                            : null
-                        })}
-                        <div className={`wardrobe-mochi color-${mochiOutfit.color}`}>
-                          <span className={`assistant-slime assistant-slime-${mochiOutfit.expression}`} aria-hidden="true">
-                            <span className="assistant-slime-eye assistant-slime-eye-left" />
-                            <span className="assistant-slime-eye assistant-slime-eye-right" />
-                            <span className="assistant-slime-mouth" />
-                            <span className="assistant-slime-blush" />
-                          </span>
-                        </div>
-                        <span className="wardrobe-stage-caption">Mochi · cấp 1</span>
-                      </div>
-                      <div className="wardrobe-tray" data-tour-target="wardrobe-options">
-                        {accessorySlots.map((slot) => (
-                          <div className="wardrobe-slot" key={slot.id} role="group" aria-label={`Chọn ${slot.label}`}>
-                            <h3>{slot.label}</h3>
-                            <div className="wardrobe-options">
-                              {slot.options.filter((option) => !option.cost || unlockedAccessories.includes(`${slot.id}:${option.id}`)).map((option) => (
-                                (() => {
-                                  const accessoryKey = `${slot.id}:${option.id}`
-                                  const owned = !option.cost || unlockedAccessories.includes(accessoryKey)
-                                  const canAfford = mochiPoints >= (option.cost ?? 0)
-                                  return (
-                                    <button
-                                      className={`wardrobe-option${mochiOutfit[slot.id] === option.id ? ' active' : ''}${owned ? '' : ' locked'}`}
-                                      key={option.id}
-                                      type="button"
-                                      disabled={!owned && !canAfford}
-                                      aria-label={`${slot.label}: ${option.label}${owned ? ', đã sở hữu' : `, giá ${option.cost} sao`}`}
-                                      title={owned ? option.label : `Đổi ${option.label} với ${option.cost} sao`}
-                                      aria-pressed={mochiOutfit[slot.id] === option.id}
-                                      onClick={() => selectAccessory(slot.id, option)}
-                                    >
-                                      <span aria-hidden="true">{option.icon}</span>
-                                      <small>{owned ? option.label : `🔒 ${option.cost} sao`}</small>
-                                    </button>
-                                  )
-                                })()
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                        <div className="wardrobe-slot wardrobe-shop-slot" role="group" aria-label="Cửa hàng phụ kiện đổi bằng sao">
-                          <h3>Cửa hàng phụ kiện</h3>
-                          <p className="wardrobe-shop-note">Dùng sao từ nhiệm vụ để mua vật phẩm; vật phẩm đã mua có thể dùng lại bất cứ lúc nào.</p>
-                          {accessorySlots.map((slot) => (
-                            <div className="wardrobe-shop-category" key={slot.id}>
-                              <strong>{slot.label}</strong>
-                              <div className="wardrobe-options">
-                                {slot.options.filter((option) => option.cost).map((option) => {
-                                  const accessoryKey = `${slot.id}:${option.id}`
-                                  const owned = unlockedAccessories.includes(accessoryKey)
-                                  const canAfford = mochiPoints >= (option.cost ?? 0)
-                                  return (
-                                    <button
-                                      className={`wardrobe-option wardrobe-shop-item${owned ? ' owned' : ''}`}
-                                      key={option.id}
-                                      type="button"
-                                      disabled={!owned && !canAfford}
-                                      aria-label={`${owned ? 'Đã mua' : 'Mua'} ${option.label}, giá ${option.cost} sao`}
-                                      onClick={() => selectAccessory(slot.id, option)}
-                                    >
-                                      <span aria-hidden="true">{option.icon}</span>
-                                      <small>{option.label}</small>
-                                      <small>{owned
-                                        ? mochiOutfit[slot.id] === option.id ? 'Đang dùng' : 'Đã mua · Trang bị'
-                                        : `Mua · ${option.cost} sao`}</small>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="wardrobe-slot" role="group" aria-label="Chọn màu Mochi">
-                          <h3>Màu Mochi</h3>
-                          <div className="wardrobe-options wardrobe-color-options">
-                            {mochiColors.map((option) => (
-                              <button
-                                className={`wardrobe-option wardrobe-color-option${mochiOutfit.color === option.id ? ' active' : ''}`}
-                                key={option.id}
-                                type="button"
-                                aria-label={`Màu Mochi: ${option.label}`}
-                                aria-pressed={mochiOutfit.color === option.id}
-                                onClick={() => updateMochiColor(option.id)}
-                              >
-                                <span style={{ backgroundColor: option.color }} aria-hidden="true" />
-                                <small>{option.label}</small>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="wardrobe-slot" role="group" aria-label="Chọn biểu cảm Mochi">
-                          <h3>Biểu cảm</h3>
-                          <div className="wardrobe-options wardrobe-expression-options">
-                            {mascotExpressions.map((option) => (
-                              <button
-                                className={`wardrobe-option wardrobe-expression-option${mochiOutfit.expression === option.id ? ' active' : ''}`}
-                                key={option.id}
-                                type="button"
-                                aria-label={`Biểu cảm: ${option.label}`}
-                                aria-pressed={mochiOutfit.expression === option.id}
-                                onClick={() => updateMochiExpression(option.id)}
-                              >
-                                <span aria-hidden="true">{option.icon}</span>
-                                <small>{option.label}</small>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                </div>
+                <Wardrobe
+                  mochiPoints={mochiPoints}
+                  unlockedAccessories={unlockedAccessories}
+                  mochiOutfit={mochiOutfit}
+                  outfitHasChanges={outfitHasChanges}
+                  onSaveMochiOutfit={saveMochiOutfit}
+                  onSelectAccessory={selectAccessory}
+                  onUpdateMochiColor={updateMochiColor}
+                  onUpdateMochiExpression={updateMochiExpression}
+                />
               )}
 
               {page === 'budgets' && (
@@ -3236,72 +2819,6 @@ function App() {
         )}
       </div>
     </>
-  )
-}
-
-function SectionHeading({ title, detail }: { title: string; detail: string }) {
-  return <div className="section-heading"><h2>{title}</h2><p>{detail}</p></div>
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className="empty-state"><span aria-hidden="true">🌷</span><p>{text}</p></div>
-}
-
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone: 'income' | 'expense' | 'balance' | 'debt' | 'lent' }) {
-  return <article className={`summary-card ${tone}`}><p>{label}</p><strong>{value}</strong></article>
-}
-
-function MOAmountInput({
-  value,
-  onChange,
-  placeholder = 'Nhập số MO',
-  required = false,
-  allowNegative = false,
-}: {
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-  required?: boolean
-  allowNegative?: boolean
-}) {
-  const isNegative = allowNegative && value.startsWith('-')
-  const digits = value.replace(/\D/g, '')
-  const numericValue = Number(digits)
-  const suggestedValues = !isNegative && digits && numericValue > 0 && numericValue < 1000
-    ? [`${digits}000`, `${digits}000000`]
-    : []
-
-  return (
-    <span className="mo-amount-control">
-      <input
-        type="text"
-        inputMode={allowNegative ? 'decimal' : 'numeric'}
-        pattern={allowNegative ? '-?[0-9.]*' : '[0-9.]*'}
-        autoComplete="off"
-        maxLength={22}
-        required={required}
-        value={`${isNegative ? '-' : ''}${formatIntegerInput(value)}`}
-        onChange={(event) => {
-          const nextValue = event.target.value
-          const negative = allowNegative && nextValue.trimStart().startsWith('-')
-          const nextDigits = nextValue.replace(/\D/g, '').slice(0, 16)
-          onChange(`${negative ? '-' : ''}${nextDigits}`)
-        }}
-        placeholder={placeholder}
-      />
-      <small className="mo-amount-unit">MO</small>
-      {suggestedValues.map((suggestedValue) => (
-        <button
-          key={suggestedValue}
-          className="mo-amount-suggestion"
-          type="button"
-          aria-label={`Dùng đề xuất ${formatIntegerInput(suggestedValue)} MO`}
-          onClick={() => onChange(suggestedValue)}
-        >
-          {formatIntegerInput(suggestedValue)} MO · +{suggestedValue.endsWith('000000') ? '000000' : '000'}
-        </button>
-      ))}
-    </span>
   )
 }
 
