@@ -16,6 +16,16 @@ export const backupPreferenceKeys = [
   'mochi-frequent-category-options',
 ] as const
 
+const backupTableKeys = [
+  'transactions',
+  'budgets',
+  'goals',
+  'goalContributions',
+  'tasks',
+  'moneySources',
+  'points',
+] as const
+
 export type BackupPreferenceKey = typeof backupPreferenceKeys[number]
 
 export interface MochiBackup {
@@ -139,12 +149,15 @@ const hasUniqueIds = (records: Array<{ id?: number }>) =>
 
 export const parseMochiBackup = (value: unknown): MochiBackup => {
   if (!isRecord(value) || value.format !== 'mochi-backup' || value.version !== 1 ||
-    typeof value.exportedAt !== 'string' || !isRecord(value.tables) || !isRecord(value.preferences)) {
+    typeof value.exportedAt !== 'string' || Number.isNaN(Date.parse(value.exportedAt)) ||
+    !isRecord(value.tables) || !isRecord(value.preferences)) {
     throw new Error('Tệp không đúng định dạng sao lưu Mochi.')
   }
 
   const { tables, preferences } = value
-  if (!isArrayOf(tables.transactions, isTransaction) ||
+  if (!backupTableKeys.every((key) => key in tables) ||
+    !Object.keys(tables).every((key) => backupTableKeys.includes(key as typeof backupTableKeys[number])) ||
+    !isArrayOf(tables.transactions, isTransaction) ||
     !isArrayOf(tables.budgets, isBudget) ||
     !isArrayOf(tables.goals, isGoal) ||
     !isArrayOf(tables.goalContributions, isGoalContribution) ||
@@ -168,6 +181,42 @@ export const parseMochiBackup = (value: unknown): MochiBackup => {
   ]
   if (!records.every(hasUniqueIds)) {
     throw new Error('Tệp sao lưu có mã dữ liệu bị trùng.')
+  }
+
+  const transactionsById = new Map(tables.transactions.map((transaction) => [transaction.id, transaction]))
+  const moneySourceIds = new Set(tables.moneySources.map((source) => source.id))
+  const goalIds = new Set(tables.goals.map((goal) => goal.id))
+  const hasValidTransactionSources = tables.transactions.every((transaction) =>
+    (transaction.sourceId === undefined || moneySourceIds.has(transaction.sourceId)) &&
+    (transaction.relatedSourceId === undefined || moneySourceIds.has(transaction.relatedSourceId)),
+  )
+  const hasValidOpeningBalanceTransactions = tables.moneySources.every((source) => {
+    if (source.openingBalanceTransactionId === undefined) return true
+    const transaction = transactionsById.get(source.openingBalanceTransactionId)
+    return transaction !== undefined &&
+      transaction.sourceId === source.id &&
+      transaction.isOpeningBalance === true
+  })
+  const hasValidGoalContributions = tables.goalContributions.every((contribution) => {
+    const transaction = transactionsById.get(contribution.transactionId)
+    return goalIds.has(contribution.goalId) &&
+      moneySourceIds.has(contribution.sourceId) &&
+      transaction?.type === 'expense' &&
+      transaction.category === 'Tiết kiệm' &&
+      transaction.amount === contribution.amount &&
+      transaction.date === contribution.date &&
+      transaction.sourceId === contribution.sourceId
+  })
+  const hasUniqueContributionTransactions =
+    new Set(tables.goalContributions.map((contribution) => contribution.transactionId)).size ===
+    tables.goalContributions.length
+  if (
+    !hasValidTransactionSources ||
+    !hasValidOpeningBalanceTransactions ||
+    !hasValidGoalContributions ||
+    !hasUniqueContributionTransactions
+  ) {
+    throw new Error('Tệp sao lưu chứa liên kết dữ liệu không hợp lệ hoặc không đầy đủ.')
   }
 
   return {

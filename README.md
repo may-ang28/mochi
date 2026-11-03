@@ -12,7 +12,7 @@ Trong Cài đặt, người dùng có thể xuất toàn bộ dữ liệu ứng 
 
 ## Chạy ứng dụng và ChiChat
 
-ChiChat trên giao diện hiện tổng kết dữ liệu ngay trong trình duyệt và không tự gửi dữ liệu tài chính ra ngoài. Backend có endpoint AI tùy chọn `POST /api/chat`; khi được gọi, endpoint chuyển nội dung tin nhắn và tên người dùng (nếu có) tới dịch vụ được cấu hình trong `AI_API_URL`. Không gửi thông tin tài chính nhạy cảm trong nội dung chat nếu chưa muốn chia sẻ với dịch vụ đó.
+ChiChat trên giao diện hiện tổng kết dữ liệu ngay trong trình duyệt và không tự gửi dữ liệu tài chính ra ngoài. Frontend hiện không gọi `POST /api/chat`. Endpoint này đang bị vô hiệu hóa: route trả HTTP 503 thay vì xử lý tin nhắn hoặc gọi dịch vụ AI. Vì rate limit chung được áp dụng trước route, request vượt giới hạn `/api` có thể nhận HTTP 429 trước khi tới route.
 
 Chạy frontend:
 
@@ -22,6 +22,6 @@ Chạy frontend:
    npm run dev
    ```
 
-Mở địa chỉ Vite hiển thị trong terminal. ChiChat hiện không gọi endpoint AI của backend.
+Mở địa chỉ Vite hiển thị trong terminal.
 
-Backend dùng `express-rate-limit` để giới hạn 100 yêu cầu mỗi 15 phút cho `/api` và 10 yêu cầu mỗi 15 phút cho `/api/chat`. CORS chỉ cấp quyền truy cập trình duyệt cho các origin trong `CORS_ORIGINS`, là danh sách origin cách nhau bằng dấu phẩy. Sao chép `backend/.env.example` thành `backend/.env`, đặt `CORS_ORIGINS` thành domain frontend triển khai và cấu hình `AI_API_KEY` trước khi sử dụng endpoint AI. Tên người dùng gửi đến endpoint được kiểm tra định dạng 2–30 ký tự.
+Backend có `GET /`, trả thông báo backend đang chạy, và `GET /api/health`, trả trạng thái API. `express-rate-limit` giới hạn chung 100 yêu cầu mỗi 15 phút cho các đường dẫn `/api`; do đó, khi vượt giới hạn middleware có thể trả HTTP 429. Nếu request tới được route, `POST /api/chat` luôn trả HTTP 503 vì endpoint đang bị vô hiệu hóa. CORS cho phép các origin được liệt kê trong `CORS_ORIGINS` (mặc định `http://localhost:5173`); request không có header `Origin` vẫn được chấp nhận. Frontend hiện không gọi endpoint chat, nên không cần cấu hình `AI_API_KEY` để chạy giao diện.

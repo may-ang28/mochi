@@ -675,7 +675,7 @@ function App() {
   const exportAccountBackup = () => {
     void runAction(async () => {
       const [allTransactions, allBudgets, allGoals, allGoalContributions, allTasks, allMoneySources, allPoints] =
-        await Promise.all([
+        await db.transaction('r', db.tables, () => Promise.all([
           db.transactions.toArray(),
           db.budgets.toArray(),
           db.goals.toArray(),
@@ -683,7 +683,7 @@ function App() {
           db.tasks.toArray(),
           db.moneySources.toArray(),
           db.points.toArray(),
-        ])
+        ]))
       const preferences = Object.fromEntries(
         backupPreferenceKeys.map((key) => [key, localStorage.getItem(getAccountPreferenceKey(key))]),
       )
@@ -760,13 +760,19 @@ function App() {
           ])
         })
       } catch (importError) {
-        try {
-          oldPreferences.forEach(({ key, value }) => {
+        const preferenceRestoreErrors: unknown[] = []
+        oldPreferences.forEach(({ key, value }) => {
+          try {
             if (value === null) localStorage.removeItem(key)
             else localStorage.setItem(key, value)
-          })
-        } catch {
-          throw new Error('Không thể hoàn tất nhập bản sao lưu hoặc khôi phục tùy chỉnh cũ. Hãy kiểm tra dữ liệu Mochi trước khi thử lại.')
+          } catch (restoreError) {
+            preferenceRestoreErrors.push(restoreError)
+          }
+        })
+        if (preferenceRestoreErrors.length > 0) {
+          throw new Error(
+            `Nhập bản sao lưu thất bại và không thể khôi phục ${preferenceRestoreErrors.length} tùy chỉnh cũ. Dữ liệu bảng Dexie đã được giữ nguyên; hãy kiểm tra lại tùy chỉnh trước khi thử lại.`,
+          )
         }
         throw importError
       }
