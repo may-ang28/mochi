@@ -3,6 +3,7 @@ import type {
   Goal,
   GoalContribution,
   MoneySource,
+  MochiPointHistoryEntry,
   MochiPointsRecord,
   Task,
   Transaction,
@@ -81,6 +82,7 @@ const isBudget = (value: unknown): value is Budget => {
   if (!isRecord(value)) return false
   return isId(value.id) &&
     typeof value.category === 'string' &&
+    isOptional(value, 'note', (item) => typeof item === 'string') &&
     isOptional(value, 'subcategories', isStringArray) &&
     isSafeInteger(value.limit) && value.limit >= 0 &&
     typeof value.month === 'string' && /^\d{4}-\d{2}$/.test(value.month)
@@ -130,12 +132,23 @@ const isMoneySource = (value: unknown): value is MoneySource => {
     isOptional(value, 'openingBalanceTransactionId', isId)
 }
 
+const isMochiPointHistoryEntry = (value: unknown): value is MochiPointHistoryEntry => {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string' &&
+    isSafeInteger(value.amount) &&
+    typeof value.reason === 'string' &&
+    typeof value.createdAt === 'string' &&
+    !Number.isNaN(Date.parse(value.createdAt))
+}
+
 const isMochiPointsRecord = (value: unknown): value is MochiPointsRecord => {
   if (!isRecord(value)) return false
   return isId(value.id) &&
     isSafeInteger(value.total) && value.total >= 0 &&
     isOptional(value, 'unlockedAccessories', isStringArray) &&
     isOptional(value, 'checkInDates', isStringArray) &&
+    isOptional(value, 'pointHistory', (item) => Array.isArray(item) && item.every(isMochiPointHistoryEntry)) &&
+    isOptional(value, 'budgetPenaltyKeys', isStringArray) &&
     isOptional(value, 'categorySetupCompleted', (item) => typeof item === 'boolean') &&
     isOptional(value, 'onboardingEnabled', (item) => typeof item === 'boolean') &&
     isOptional(value, 'onboardingCompletedPages', isStringArray)

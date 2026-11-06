@@ -17,6 +17,9 @@ type MascotAppearance = {
 
 type SummaryPeriod = 'day' | 'week' | 'month'
 
+const incomeTransactionTypes = new Set<TransactionType>(['income', 'borrow', 'collect'])
+const expenseTransactionTypes = new Set<TransactionType>(['expense', 'repay', 'lend', 'cardPayment'])
+
 export type ChiChatSnapshot = {
   asOf: string
   transactions: Array<{
@@ -122,9 +125,9 @@ const makePeriodSummary = (snapshot: ChiChatSnapshot, period: SummaryPeriod) => 
     transaction.date >= startKey && transaction.date <= endKey,
   )
   const income = periodTransactions
-    .filter((transaction) => transaction.type === 'income')
+    .filter((transaction) => incomeTransactionTypes.has(transaction.type))
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const expenseTransactions = periodTransactions.filter((transaction) => transaction.type === 'expense')
+  const expenseTransactions = periodTransactions.filter((transaction) => expenseTransactionTypes.has(transaction.type))
   const expense = expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
   const net = income - expense
   const categoryTotals = [...expenseTransactions.reduce((totals, transaction) => {
@@ -175,10 +178,34 @@ function AssistantWidget({
     },
   ])
   const conversationEndRef = useRef<HTMLDivElement>(null)
+  const summarizedWeekendRef = useRef<string | null>(null)
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const asOfDate = parseDateKey(financeSnapshot.asOf)
+    if (asOfDate.getDay() !== 0 && asOfDate.getDay() !== 6) return
+
+    const daysSinceMonday = (asOfDate.getDay() + 6) % 7
+    const weekStart = new Date(asOfDate)
+    weekStart.setDate(weekStart.getDate() - daysSinceMonday)
+    const weekKey = [
+      weekStart.getFullYear(),
+      String(weekStart.getMonth() + 1).padStart(2, '0'),
+      String(weekStart.getDate()).padStart(2, '0'),
+    ].join('-')
+    if (summarizedWeekendRef.current === weekKey) return
+
+    summarizedWeekendRef.current = weekKey
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      { role: 'assistant', content: makePeriodSummary(financeSnapshot, 'week') },
+    ])
+  }, [financeSnapshot, isOpen])
 
   const chooseSummary = (period: SummaryPeriod, label: string) => {
     setMessages((currentMessages) => [

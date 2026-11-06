@@ -41,6 +41,7 @@ export interface MoneySource {
 export interface Budget {
   id?: number
   category: string
+  note?: string
   subcategories?: string[]
   limit: number
   month: string
@@ -74,11 +75,20 @@ export interface Task {
   goalId?: number
 }
 
+export interface MochiPointHistoryEntry {
+  id: string
+  amount: number
+  reason: string
+  createdAt: string
+}
+
 export interface MochiPointsRecord {
   id?: number
   total: number
   unlockedAccessories?: string[]
   checkInDates?: string[]
+  pointHistory?: MochiPointHistoryEntry[]
+  budgetPenaltyKeys?: string[]
   categorySetupCompleted?: boolean
   onboardingEnabled?: boolean
   onboardingCompletedPages?: string[]
