@@ -1,4 +1,4 @@
-# mochi
+<img src="frontend/public/mochi-logo.svg" alt=width="720" />
 
 ## Hướng dẫn lần đầu
 
