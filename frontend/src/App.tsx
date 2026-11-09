@@ -2116,11 +2116,13 @@ function App() {
                     <button
                       className="budget-jar-toggle"
                       type="button"
-                      disabled={!activeBudgetDetail}
-                      aria-label={activeBudgetDetail ? `Chọn danh mục ngân sách, hiện tại là ${activeBudgetDetail.category}` : 'Hũ danh mục'}
-                      aria-expanded={isBudgetPickerOpen}
+                      aria-label={activeBudgetDetail ? `Chọn danh mục ngân sách, hiện tại là ${activeBudgetDetail.category}` : 'Thêm danh mục'}
+                      aria-expanded={activeBudgetDetail ? isBudgetPickerOpen : isHomeCategoryFormOpen}
                       onClick={() => {
-                        if (!activeBudgetDetail?.id) return
+                        if (!activeBudgetDetail?.id) {
+                          setIsHomeCategoryFormOpen(true)
+                          return
+                        }
                         if (isBudgetPickerOpen) closeBudgetPicker()
                         else openBudgetPicker()
                       }}
@@ -2128,6 +2130,7 @@ function App() {
                       <div className="mochi-jar-illustration" aria-hidden="true">
                         <span className={`jar-lid${isActiveJarOpen ? ' open' : ''}`} />
                         <span className="jar-glass">
+                          {!activeBudgetDetail && <span className="empty-jar-add-icon">+</span>}
                           {Array.from({ length: activeBudgetDetail ? budgetMochiCount(activeBudgetDetail) : 0 }, (_, index) => (
                             <MochiMascot className="jar-mochi" key={index} />
                           ))}
@@ -2199,15 +2202,6 @@ function App() {
                           <button className="primary-button" type="submit">Tạo danh mục</button>
                         </div>
                       </form>
-                    ) : !activeBudgetDetail ? (
-                      <button
-                        className="quiet-button home-category-create-button"
-                        type="button"
-                        onClick={() => setIsHomeCategoryFormOpen(true)}
-                      >
-                        <span className="home-category-create-label">+ Tạo danh mục</span>
-                        <span className="home-category-create-icon" aria-hidden="true">+</span>
-                      </button>
                     ) : null}
                   </section>
 
