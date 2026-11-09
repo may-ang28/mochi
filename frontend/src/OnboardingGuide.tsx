@@ -48,7 +48,7 @@ const guideSteps: Record<GuidePage, GuideStep[]> = {
     { target: 'home-checkin', title: 'Điểm danh mỗi ngày', description: 'Nhấn “Điểm danh” một lần mỗi ngày để duy trì streak. Chuỗi ngày sẽ được lưu trong tài khoản trên thiết bị này.' },
     { target: 'home-summary', title: 'Tổng quan tài chính', description: 'Home hiển thị tổng thu, tổng chi và tổng cộng số dư của tất cả nguồn MO. Nguồn âm hoặc nguồn nợ được tính âm. Nhấn “Xem thêm số liệu” để xem thêm tổng nợ và MO đang cho mượn.' },
     { target: 'home-budget-bubbles', title: 'Chọn nguồn MO', description: 'Các biểu tượng phía trên đại diện cho nguồn MO của bạn. Trên máy tính, kéo một biểu tượng bằng chuột; trên điện thoại, chạm giữ rồi kéo vào hũ.' },
-    { target: 'home-mochi-jar', title: 'Chi vào hũ danh mục', description: 'Thả nguồn MO vào hũ đang chọn để nhập khoản chi. Nhấn vào hũ để mở danh mục nhỏ; chọn một mục hoặc dấu + để thêm mục mới. Khoản chi được ghi vào giao dịch và vẫn cộng vào tổng của hũ cha.' },
+    { target: 'home-mochi-jar', title: 'Chi vào hũ danh mục', description: 'Thả nguồn MO vào hũ đang chọn để nhập khoản chi. Chọn danh mục ở hàng bên dưới hũ, hoặc nhấn dấu + để thêm danh mục mới. Khoản chi được ghi vào giao dịch và vẫn cộng vào tổng của hũ cha.' },
     { target: 'home-recent', title: 'Giao dịch gần đây', description: 'Xem nhanh các giao dịch trong 3 ngày gần nhất dưới dạng bong bóng chat. Đây chỉ là tóm tắt; muốn sửa giao dịch, vào mục Giao dịch trong dashboard.' },
   ],
   charts: [
