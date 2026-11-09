@@ -2,7 +2,7 @@
 
 ## Hướng dẫn lần đầu
 
-Sau khi tạo tài khoản mới và Mochi tải xong dữ liệu, người dùng chọn hoặc thêm các danh mục chi tiêu thường xuyên trước phần giới thiệu chung và tour sử dụng. Các lựa chọn này được gợi ý khi tạo hũ ngân sách; người dùng vẫn có thể nhập danh mục khác. Mọi số dư và giao dịch đều hiển thị bằng MO; ô nhập tự định dạng số và có thể đưa ra gợi ý nhanh.
+Sau khi tạo tài khoản mới và Mochi tải xong dữ liệu, người dùng chọn hoặc thêm các danh mục chi tiêu thường xuyên trước phần giới thiệu chung và tour sử dụng. Các lựa chọn này được gợi ý khi tạo hũ ngân sách; người dùng vẫn có thể nhập danh mục khác. Mọi số dư và giao dịch đều hiển thị bằng MO; ô nhập tự định dạng số và có thể đưa ra gợi ý.
 
 Tour sẽ chỉ vào từng thành phần Home, gồm điểm danh, tổng quan, nguồn MO và hũ danh mục. Home chỉ hiển thị tổng thu, tổng chi và tổng cộng số dư của tất cả nguồn MO; số dư âm và khoản nợ được tính âm. Nút “Xem thêm số liệu” mở phần tổng nợ và MO đang cho mượn. Sau khi hoàn tất Home, tour dừng. Mỗi giao diện dashboard khác sẽ được hướng dẫn riêng khi người dùng mở giao diện đó lần đầu. Ngày ghi nhận và danh sách loại nguồn nằm trong “Tùy chọn nâng cao”. Danh sách gợi ý mặc định gồm tiền mặt, tài khoản và thẻ ghi nợ; có thể thêm, sửa hoặc xóa loại nguồn. Tên nguồn MO không bắt buộc. Gợi ý danh mục có thể thêm, sửa hoặc xóa trong tùy chọn nâng cao ở biểu mẫu giao dịch, đồng thời vẫn cho phép nhập danh mục tự do. Tiến độ tour được lưu riêng theo tài khoản trên thiết bị.
 
