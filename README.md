@@ -98,7 +98,7 @@ Chạy frontend:
    > Thêm ảnh chụp giao diện vào repository và cập nhật đường dẫn bên dưới khi sẵn sàng.
 
    <div align="center">
-      <img src="docs/images/mochi-home.png" alt="Giao diện Home của Mochi" width="720" />
+      <img src="docs/screenshots/thietlap.png" alt="Giao diện Home của Mochi" width="720" />
       <p><sub>Home — tổng quan tài chính của bạn</sub></p>
    </div>
 
