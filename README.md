@@ -106,8 +106,8 @@ Chạy frontend:
 
    | Thành viên | Vai trò |
    |:--|:--|
-   | *Bổ sung tên thành viên* | *Bổ sung vai trò* |
-
+   | *Nguyễn Ngọc Mỹ Anh* | *PPT + README.md* |
+   | *Lê Nguyễn Quỳnh Trang* | *Báo cáo + 2/3 code* |
    <br />
 
    <div align="center">
