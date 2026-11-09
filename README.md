@@ -1,4 +1,6 @@
-<img src="frontend/public/mochi-logo.svg" alt=width="720" />
+<div align="center">
+      <img src="frontend/public/mochi-logo.svg" alt=width="720" />
+   </div>
 
 ## Hướng dẫn lần đầu
 
